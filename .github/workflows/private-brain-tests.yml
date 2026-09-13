@@ -6,12 +6,14 @@ on:
       - 'knowledge/**'
       - 'tests/test_private_brain.py'
       - 'tests/test_vault.py'
+      - 'tests/test_private_brain_rag.py'
       - '.github/workflows/private-brain-tests.yml'
   pull_request:
     paths:
       - 'knowledge/**'
       - 'tests/test_private_brain.py'
       - 'tests/test_vault.py'
+      - 'tests/test_private_brain_rag.py'
       - '.github/workflows/private-brain-tests.yml'
 
 jobs:
@@ -24,4 +26,4 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --upgrade pip
       - run: pip install cryptography pytest
-      - run: pytest -q tests/test_private_brain.py tests/test_vault.py
+      - run: pytest -q tests/test_private_brain.py tests/test_vault.py tests/test_private_brain_rag.py
