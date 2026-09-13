@@ -20,6 +20,36 @@ Document -> classify -> encrypt/store -> chunk/embed -> ACL-filtered retrieval -
 
 The first implementation provides the policy primitives in `knowledge/private_brain.py`. A production deployment should connect these primitives to an encrypted object store, vector database, KMS/secrets manager, identity provider, DLP layer, and immutable audit log.
 
+## Runtime integration
+
+JARVIS uses the Private Brain through the `private_brain` action (`actions/private_brain.py`), which the action loader discovers automatically.
+
+| Operation | Side effect | Behaviour |
+|---|---|---|
+| `search` | A0 | ACL filter → local decrypt → keyword scoring → cloud boundary → provenance-tagged excerpts |
+| `list` | A0 | Authorized documents; titles above the cloud limit are withheld |
+| `ingest` | A2 | Stores a UTF-8 text file (≤ 2 MB) encrypted; undoable via `core/undo` |
+| `forget` | A2 | Irreversible delete, only after on-screen confirmation (`core/confirm`) |
+
+| Module | Responsibility |
+|---|---|
+| `config.py` | Loads and validates `config/private_brain.json` (the single source of policy) |
+| `keys.py` | Vault key from the OS credential store via `keyring`; `JARVIS_PRIVATE_BRAIN_KEY` overrides it for headless runs |
+| `audit.py` | `AuditLogger` — append-only JSONL, file mode 0600, ids/decisions/reasons only |
+| `brain.py` | `PrivateBrain` service: encrypted documents *and* encrypted index, retrieval, deletion |
+
+Local data lives in `memory/private_brain/` (git-ignored). Configure the local principal, storage paths and cloud limit in `config/private_brain.json`; invalid levels or `log_content: true` are rejected at load time.
+
+Known limits: retrieval is keyword-based (no embeddings yet), there is no private runtime, so `SECRET`/`TOP_SECRET` content is never returned to the live model, and the conversation itself (including excerpts the model has seen) is governed by the general memory rules, not by this package.
+
+## Development
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt -r requirements-dev.txt
+.venv/bin/python -m pytest -q tests/test_private_brain*.py tests/test_vault.py
+```
+
 ## Cloud routing
 
 By default, `CONFIDENTIAL` is the highest classification allowed into a cloud LLM context. `SECRET` and `TOP_SECRET` require a private/sovereign runtime unless an explicit security policy changes this boundary.

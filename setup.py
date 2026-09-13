@@ -16,6 +16,9 @@ from pathlib import Path
 
 OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
+# Keep in step with .python-version and the CI workflows.
+SUPPORTED_PYTHON = ((3, 11), (3, 12))
+
 
 def _run(label: str, args: list[str]) -> None:
     print(f"\n▶ {label}")
@@ -24,6 +27,11 @@ def _run(label: str, args: list[str]) -> None:
 
 def main() -> None:
     print(f"⚙  MARK LIII setup — detected OS: {OS or 'unknown'}")
+
+    if sys.version_info[:2] not in SUPPORTED_PYTHON:
+        supported = " or ".join(f"{a}.{b}" for a, b in SUPPORTED_PYTHON)
+        sys.exit(f"✖ Python {platform.python_version()} is not supported — use Python {supported} "
+                 f"(e.g. `uv venv --python 3.12 .venv`).")
 
     # requirements.txt filters OS-specific extras by itself via pip markers.
     _run("Installing Python dependencies (OS-specific extras auto-filtered)…",
