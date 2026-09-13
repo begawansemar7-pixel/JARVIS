@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "default_lookback_hours": 36,
+  "max_results_per_query": 8,
+  "sources": {
+    "indonesia": [
+      {"name": "ANTARA", "domain": "antaranews.com", "weight": 0.95},
+      {"name": "Kompas", "domain": "kompas.com", "weight": 0.92},
+      {"name": "Tempo", "domain": "tempo.co", "weight": 0.90},
+      {"name": "Detik", "domain": "detik.com", "weight": 0.88},
+      {"name": "CNN Indonesia", "domain": "cnnindonesia.com", "weight": 0.88},
+      {"name": "Metro TV", "domain": "metrotvnews.com", "weight": 0.82}
+    ],
+    "ai_global": [
+      {"name": "Reuters", "domain": "reuters.com", "weight": 1.00},
+      {"name": "AP", "domain": "apnews.com", "weight": 0.96},
+      {"name": "Financial Times", "domain": "ft.com", "weight": 0.94},
+      {"name": "The Verge", "domain": "theverge.com", "weight": 0.82},
+      {"name": "TechCrunch", "domain": "techcrunch.com", "weight": 0.82},
+      {"name": "MIT Technology Review", "domain": "technologyreview.com", "weight": 0.86}
+    ],
+    "ai_indonesia": [
+      {"name": "ANTARA", "domain": "antaranews.com", "weight": 0.95},
+      {"name": "Komdigi", "domain": "komdigi.go.id", "weight": 1.00},
+      {"name": "BRIN", "domain": "brin.go.id", "weight": 1.00},
+      {"name": "Telkom", "domain": "telkom.co.id", "weight": 1.00},
+      {"name": "DailySocial", "domain": "dailysocial.id", "weight": 0.78}
+    ],
+    "telecom_telkom": [
+      {"name": "Telkom Indonesia", "domain": "telkom.co.id", "weight": 1.00},
+      {"name": "Telkomsel", "domain": "telkomsel.com", "weight": 0.98},
+      {"name": "ANTARA", "domain": "antaranews.com", "weight": 0.95},
+      {"name": "Kontan", "domain": "kontan.co.id", "weight": 0.90},
+      {"name": "Bisnis Indonesia", "domain": "bisnis.com", "weight": 0.90},
+      {"name": "Tirto", "domain": "tirto.id", "weight": 0.78},
+      {"name": "IndoTelko", "domain": "indotelko.com", "weight": 0.82}
+    ]
+  }
+}
