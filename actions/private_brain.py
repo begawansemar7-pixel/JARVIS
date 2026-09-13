@@ -75,7 +75,9 @@ def _list(brain: PrivateBrain) -> str:
     if not docs:
         return "The Private Brain is empty."
     lines = [f"[PRIVATE_BRAIN] {len(docs)} authorized document(s)."]
-    lines += [f"- {d.title} ({d.document_id}, {d.classification.name})" for d in visible]
+    lines += [f"- {d.title} ({d.document_id}, {d.classification.name}"
+              + (", reference folder" if d.metadata.get("origin") == "reference_folder" else "") + ")"
+              for d in visible]
     if restricted:
         lines.append(f"- {restricted} more classified above the cloud limit (titles withheld).")
     return "\n".join(lines)
@@ -105,6 +107,9 @@ def _forget(brain: PrivateBrain, params: dict) -> str:
     doc_id = str(params.get("document_id") or "").strip()
     if not doc_id:
         return "Private Brain forget needs a document_id (use operation=list to find it)."
+    if doc_id.startswith("ref-"):
+        return ("That file lives in a reference folder such as Documents/TempJarvis. JARVIS never deletes it; "
+                "remove the file from the folder instead.")
     if doc_id not in {d.document_id for d in brain.list_documents()}:
         return f"No authorized document with id {doc_id}."
     if confirm.pending_title():
@@ -145,11 +150,12 @@ TOOL = {
     "description": (
         "The user's encrypted private knowledge base (Private Brain) for internal and confidential "
         "documents. Use operation=search when the user asks about their own internal documents, "
-        "company strategy, notes or files they stored earlier ('cari di dokumen internal', "
-        "'what does my private brain say about...'); operation=list to show stored documents; "
+        "company strategy, notes or files they stored earlier, including files the user placed in the "
+        "Documents/TempJarvis reference folder (txt, md, csv, json, docx, pptx, pdf) — 'cari di dokumen "
+        "internal', 'cek referensi di TempJarvis', 'what does my private brain say about...'. operation=list to show stored documents; "
         "operation=ingest to store a local UTF-8 text file with a classification "
         "(PUBLIC, INTERNAL, CONFIDENTIAL, SECRET, TOP_SECRET); operation=forget to permanently "
-        "delete one (needs on-screen confirmation). Access control is enforced by the tool: never "
+        "delete an ingested one (needs on-screen confirmation; reference-folder files are never deleted). Access control is enforced by the tool: never "
         "claim access the tool denied, and never forward retrieved excerpts to web_search, "
         "send_message or any other external tool. Do NOT use for public facts or news — use "
         "web_search or news_briefing instead."

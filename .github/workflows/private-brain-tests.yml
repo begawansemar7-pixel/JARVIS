@@ -32,5 +32,5 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: pip install cryptography keyring -r requirements-dev.txt
+      - run: pip install cryptography keyring pypdf python-docx python-pptx reportlab -r requirements-dev.txt
       - run: pytest -q tests/test_private_brain*.py tests/test_vault.py

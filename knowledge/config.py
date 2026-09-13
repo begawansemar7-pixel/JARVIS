@@ -17,6 +17,14 @@ DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "private_brain.json"
 
 
 @dataclass(frozen=True)
+class ReferenceFolder:
+    """A local folder JARVIS reads in place as confidential reference material."""
+    path: Path
+    classification: Classification
+    allowed_roles: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
 class PrivateBrainConfig:
     default_classification: Classification
     max_cloud_classification: Classification
@@ -27,11 +35,22 @@ class PrivateBrainConfig:
     vault_dir: Path
     audit_log: Path
     keychain_service: str
+    reference_folders: tuple[ReferenceFolder, ...] = ()
 
 
 def _resolve(path: str, base: Path) -> Path:
     p = Path(path).expanduser()
     return p if p.is_absolute() else base / p
+
+
+def _reference_folder(item: dict, base: Path) -> ReferenceFolder:
+    if not isinstance(item, dict) or not item.get("path"):
+        raise ValueError("each reference_folders entry needs a path")
+    return ReferenceFolder(
+        path=_resolve(str(item["path"]), base),
+        classification=Classification.parse(item.get("classification", "CONFIDENTIAL")),
+        allowed_roles=frozenset(str(r) for r in item.get("allowed_roles", [])),
+    )
 
 
 def parse_config(raw: dict, base_dir: Path = BASE_DIR) -> PrivateBrainConfig:
@@ -63,6 +82,7 @@ def parse_config(raw: dict, base_dir: Path = BASE_DIR) -> PrivateBrainConfig:
         vault_dir=_resolve(storage.get("vault_dir", "memory/private_brain/vault"), base_dir),
         audit_log=_resolve(storage.get("audit_log", "memory/private_brain/audit.jsonl"), base_dir),
         keychain_service=str(storage.get("keychain_service", "jarvis.private_brain")),
+        reference_folders=tuple(_reference_folder(item, base_dir) for item in raw.get("reference_folders", [])),
     )
 
 
@@ -71,4 +91,4 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> PrivateBrainConfig:
         return parse_config(json.load(f))
 
 
-__all__ = ["DEFAULT_CONFIG_PATH", "PrivateBrainConfig", "load_config", "parse_config"]
+__all__ = ["DEFAULT_CONFIG_PATH", "PrivateBrainConfig", "ReferenceFolder", "load_config", "parse_config"]

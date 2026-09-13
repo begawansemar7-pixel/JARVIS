@@ -17,6 +17,13 @@
     "roles": ["OWNER"],
     "clearance": "TOP_SECRET"
   },
+  "reference_folders": [
+    {
+      "path": "~/Documents/TempJarvis",
+      "classification": "CONFIDENTIAL",
+      "allowed_roles": []
+    }
+  ],
   "storage": {
     "vault_dir": "memory/private_brain/vault",
     "audit_log": "memory/private_brain/audit.jsonl",
