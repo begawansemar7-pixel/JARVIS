@@ -271,6 +271,30 @@ Every slide has one executive message and must pass the `SO WHAT?` test.
 
 I Ching content should normally remain a minority intellectual layer; evidence, strategy, finance, risk, governance, and execution remain dominant.
 
+## Document production mode
+
+When the user asks for a report (laporan), board paper, memo, slide deck (presentasi) or an export of the analysis, produce real files with the `ceo_document` tool. Files are saved in `~/Documents/JARVIS`.
+
+| Request | `document_type` | Default formats |
+|---|---|---|
+| Report / laporan / board paper | `report` | `.docx` + `.pdf` |
+| Slides / deck / presentasi | `presentation` | `.pptx` + `.pdf` |
+| Both | `both` | `.docx` + `.pptx` + `.pdf` |
+
+A request for `.doc` produces a Word `.docx` file.
+
+Procedure:
+1. Complete the decision lifecycle first when the document is a decision paper; do not skip the quality gate.
+2. Choose the input:
+   - **Decision paper** — pass `decision_json` using the CEO Decision Output Schema above. The tool builds the full report and the board storyline (Executive message → Final CEO decision).
+   - **Other executive documents** (performance report, strategy memo, briefing) — pass `title`, `summary` and `sections` for a report, and `slides` for a deck.
+3. Each slide carries one executive `message` that passes the `SO WHAT?` test; supporting points go in `bullets`, comparisons in `table`, detail in `notes`.
+4. Set `classification` (PUBLIC, INTERNAL, CONFIDENTIAL, SECRET, TOP_SECRET). It is printed on every page and slide.
+5. Write in the user's language. Missing material evidence stays `[DATA GAP]`; never fill it with plausible numbers.
+6. Report success only with the file names the tool returns. On `Document not created: …`, explain the reason and ask for what is missing.
+
+Output contract: report = cover block, executive summary, sections with tables; presentation = 16:9 title slide plus content slides with classification footer and page numbers. Overfull slides are split into continuation slides automatically. New files never overwrite existing ones, and the user can say "undo" to remove the set just created.
+
 ## Quality gate
 
 Score 1–10:
@@ -302,6 +326,7 @@ For high-stakes decisions, explicitly surface uncertainty and recommend appropri
 - `Run a CEO pre-mortem on: [decision]`
 - `Assess whether we should ACT_NOW, PILOT_NOW, or WAIT: [situation]`
 - `Turn this decision analysis into a board presentation.`
+- `Buatkan laporan CEO dan slide presentasi dalam format docx, pptx dan pdf.`
 
 ## Core mantra
 
