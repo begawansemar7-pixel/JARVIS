@@ -70,12 +70,14 @@ from actions.background_monitor import (
 from actions.web_search        import _news as _fetch_news_sync
 from memory.config_manager     import (
     get_brief_enabled, get_voice, get_wake_word_enabled, save_wake_word_enabled,    get_input_device, get_output_device,
+    get_assistant_name, get_user_name,
 )
 from core.plugin_loader        import discover_plugins
 from core                      import undo as undo_stack
 from core                      import confirm as confirm_gate
 from core                      import audio_devices
 from core.action_loader        import discover_actions
+from core.introduction         import identity_line, startup_introduction_clause
 from core.wake_word            import (
     WakeWordDetector, is_ready as wake_is_ready, install_and_download as wake_install,
 )
@@ -705,6 +707,7 @@ class JarvisLive:
             f"[IDENTITY]\n"
             f"Your name is {self._asst_name}. "
             f"Always refer to yourself as {self._asst_name}.\n"
+            f"{identity_line(self._asst_name, _user_name)}\n"
             f"{_addr}\n\n"
         )
 
@@ -1253,9 +1256,13 @@ class JarvisLive:
                 f" Also briefly and naturally mention that {_when}: {last['summary']}"
             )
 
+        intro_clause = startup_introduction_clause(
+            getattr(self, "_asst_name", "") or get_assistant_name(), name or get_user_name()
+        )
         p1 = (
-            f"Greet the user warmly, mention it is {time_str}, and say you are fetching today's news now.{session_clause} "
-            f"Keep it to 2 short sentences max. Do not call any tools.{lang_clause}{name_clause}"
+            f"Greet the user warmly.{intro_clause} Then mention it is {time_str}, and say you are "
+            f"fetching today's news now.{session_clause} "
+            f"Keep it to 3 short sentences max. Do not call any tools.{lang_clause}{name_clause}"
         )
 
         # Clear the turn-done event so we can wait for Phase 1 to finish
