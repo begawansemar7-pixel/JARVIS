@@ -1,0 +1,2 @@
+# Test tooling. Runtime dependencies live in requirements.txt.
+pytest
