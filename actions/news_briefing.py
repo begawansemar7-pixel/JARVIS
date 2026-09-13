@@ -53,11 +53,23 @@ def _similarity(a: str, b: str) -> float:
     return len(ta & tb) / len(ta | tb)
 
 
-def _fingerprint(item: dict) -> str:
+def _fingerprints(item: dict) -> set[str]:
+    """Return URL and title fingerprints so duplicate stories are collapsed even
+    when two publishers expose different URLs for the same headline."""
+    fingerprints = set()
     url = (item.get("url") or "").split("#", 1)[0].rstrip("/").lower()
+    title = _norm(item.get("title", ""))
     if url:
-        return hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
-    return hashlib.sha1(_norm(item.get("title", "")).encode("utf-8")).hexdigest()[:16]
+        fingerprints.add("url:" + hashlib.sha1(url.encode("utf-8")).hexdigest()[:16])
+    if title:
+        fingerprints.add("title:" + hashlib.sha1(title.encode("utf-8")).hexdigest()[:16])
+    return fingerprints
+
+
+def _fingerprint(item: dict) -> str:
+    """Backward-compatible primary fingerprint used by tests and callers."""
+    fps = sorted(_fingerprints(item))
+    return fps[0] if fps else "empty"
 
 
 def _source_weight(item: dict, registry: dict) -> float:
@@ -65,13 +77,14 @@ def _source_weight(item: dict, registry: dict) -> float:
     best = 0.55
     for entries in registry.get("sources", {}).values():
         for source in entries:
-            if domain == source.get("domain") or domain.endswith("." + source.get("domain", "")):
+            source_domain = str(source.get("domain", "")).lower()
+            if source_domain and (domain == source_domain or domain.endswith("." + source_domain)):
                 best = max(best, float(source.get("weight", 0.55)))
     return min(1.0, best)
 
 
 def _recency_score(item: dict) -> float:
-    """Use provider timestamps when present; otherwise give a safe neutral score."""
+    """Use provider timestamps when present; otherwise use a neutral score."""
     raw = item.get("published") or item.get("date") or item.get("published_at")
     if not raw:
         return 0.65
@@ -99,10 +112,11 @@ def _score(item: dict, category: str, taxonomy: dict, registry: dict) -> float:
     source = _source_weight(item, registry)
     recency = _recency_score(item)
     relevance = _keyword_score(item, cfg.get("keywords", []))
-    momentum = float(item.get("momentum", 0.5))
-    confirmation = float(item.get("confirmation", 0.5))
-    # Executive ranking: recency 25%, authority 20%, momentum 15%, confirmation 15%,
-    # strategic relevance 15%, user/topic relevance 10%.
+    momentum = min(1.0, max(0.0, float(item.get("momentum", 0.5))))
+    confirmation = min(1.0, max(0.0, float(item.get("confirmation", 0.5))))
+    # Weights intentionally sum to 1.0: recency 25%, authority 20%, momentum 15%,
+    # confirmation 15%, strategic relevance 15%, user/topic relevance 10%.
+    # The taxonomy relevance signal is the available proxy for both relevance dimensions.
     score = (
         0.25 * recency +
         0.20 * source +
@@ -115,14 +129,23 @@ def _score(item: dict, category: str, taxonomy: dict, registry: dict) -> float:
 
 
 def deduplicate(items: list[dict]) -> list[dict]:
-    """Remove exact URL/title duplicates while retaining the strongest source."""
-    by_fp: dict[str, dict] = {}
-    for item in items:
-        fp = _fingerprint(item)
-        current = by_fp.get(fp)
-        if current is None or item.get("score", 0) > current.get("score", 0):
-            by_fp[fp] = item
-    return list(by_fp.values())
+    """Remove URL/title duplicates while retaining the strongest scored item."""
+    kept: list[dict] = []
+    seen: dict[str, int] = {}
+    for item in sorted(items, key=lambda x: x.get("score", 0), reverse=True):
+        fps = _fingerprints(item)
+        if not fps:
+            kept.append(item)
+            continue
+        duplicate_index = next((seen[fp] for fp in fps if fp in seen), None)
+        if duplicate_index is not None:
+            # The list is score-descending, so the first occurrence is strongest.
+            continue
+        index = len(kept)
+        kept.append(item)
+        for fp in fps:
+            seen[fp] = index
+    return kept
 
 
 def cluster_events(items: list[dict], threshold: float = 0.52) -> list[dict]:
@@ -133,15 +156,18 @@ def cluster_events(items: list[dict], threshold: float = 0.52) -> list[dict]:
         for cluster in clusters:
             if _similarity(item.get("title", ""), cluster["lead"].get("title", "")) >= threshold:
                 cluster["items"].append(item)
-                cluster["sources"] = sorted(set(cluster["sources"] + [item.get("source", "")]))
-                cluster["confirmation"] = min(1.0, 0.5 + 0.15 * (len(cluster["items"]) - 1))
+                source = item.get("source", "")
+                if source and source not in cluster["sources"]:
+                    cluster["sources"].append(source)
+                cluster["confirmation"] = min(1.0, 0.5 + 0.15 * (len(cluster["sources"]) - 1))
                 placed = True
                 break
         if not placed:
+            source = item.get("source", "")
             clusters.append({
                 "lead": item,
                 "items": [item],
-                "sources": [item.get("source", "")],
+                "sources": [source] if source else [],
                 "confirmation": 0.5,
             })
     return clusters
@@ -160,6 +186,7 @@ def _fetch_category(category: str, taxonomy: dict, max_results: int) -> list[dic
                 raw["source"] = raw.get("source") or _domain(raw.get("url", ""))
                 results.append(raw)
         except Exception as exc:
+            # A single provider/query failure must not abort the category or briefing.
             print(f"[News] source query failed category={category}: {exc}")
     return results
 
@@ -170,14 +197,20 @@ def collect_news(max_per_category: int = 5) -> dict[str, list[dict]]:
     output: dict[str, list[dict]] = {}
     for category in CATEGORY_ORDER:
         raw = _fetch_category(category, taxonomy, max_results=max(6, max_per_category + 2))
-        # Apply cross-source confirmation before final ranking.
         for item in raw:
-            same_event = sum(
-                1 for other in raw
-                if other is not item and _similarity(item.get("title", ""), other.get("title", "")) >= 0.52
-            )
-            item["confirmation"] = min(1.0, 0.5 + 0.15 * same_event)
+            # Confirmation requires genuinely distinct publishers, not merely duplicate
+            # query results from the same provider.
+            matching_sources = {
+                other.get("source", "")
+                for other in raw
+                if other is not item
+                and other.get("source", "")
+                and other.get("source", "") != item.get("source", "")
+                and _similarity(item.get("title", ""), other.get("title", "")) >= 0.52
+            }
+            item["confirmation"] = min(1.0, 0.5 + 0.15 * len(matching_sources))
             item["score"] = _score(item, category, taxonomy, registry)
+
         unique = deduplicate(raw)
         clusters = cluster_events(unique)
         selected = []
@@ -185,7 +218,7 @@ def collect_news(max_per_category: int = 5) -> dict[str, list[dict]]:
             lead = dict(cluster["lead"])
             lead["confirmation"] = cluster["confirmation"]
             lead["score"] = _score(lead, category, taxonomy, registry)
-            lead["sources"] = [s for s in cluster["sources"] if s]
+            lead["sources"] = cluster["sources"]
             selected.append(lead)
         output[category] = sorted(selected, key=lambda x: x.get("score", 0), reverse=True)[:max_per_category]
     return output
@@ -236,7 +269,11 @@ def render_briefing(data: dict[str, list[dict]]) -> str:
 
 def news_briefing(parameters: dict, response=None, player=None, session_memory=None) -> str:
     params = parameters or {}
-    max_items = max(1, min(10, int(params.get("max_items", 5))))
+    try:
+        max_items = int(params.get("max_items", 5))
+    except (TypeError, ValueError):
+        max_items = 5
+    max_items = max(1, min(10, max_items))
     try:
         data = collect_news(max_per_category=max_items)
         result = render_briefing(data)
