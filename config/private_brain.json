@@ -1,0 +1,23 @@
+{
+  "classification_levels": {
+    "PUBLIC": 0,
+    "INTERNAL": 1,
+    "CONFIDENTIAL": 2,
+    "SECRET": 3,
+    "TOP_SECRET": 4
+  },
+  "default_classification": "INTERNAL",
+  "max_cloud_classification": "CONFIDENTIAL",
+  "private_runtime_required_for": ["SECRET", "TOP_SECRET"],
+  "require_role_match_when_roles_are_declared": true,
+  "log_content": false,
+  "log_access_decisions": true,
+  "principles": [
+    "deny_by_default",
+    "authorize_before_retrieval_context",
+    "least_privilege",
+    "data_minimization",
+    "provenance_required",
+    "audit_access_without_secret_payloads"
+  ]
+}
