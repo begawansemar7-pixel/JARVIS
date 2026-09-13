@@ -25,6 +25,8 @@ psutil
 send2trash
 youtube-transcript-api
 python-pptx
+python-docx
+reportlab
 openpyxl
 
 # Remote dashboard

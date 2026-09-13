@@ -136,6 +136,24 @@ tools:
       slide_count: number
     output: presentation_outline
 
+  - name: ceo_document
+    purpose: Save a CEO report (.docx/.pdf) and/or board presentation (.pptx/.pdf) to ~/Documents/JARVIS. Implemented by actions/ceo_documents.py.
+    side_effect: A1 (creates new files only; undoable)
+    input:
+      document_type: report | presentation | both
+      formats: string          # comma-separated docx, pptx, pdf
+      title: string
+      subtitle: string
+      author: string
+      classification: PUBLIC | INTERNAL | CONFIDENTIAL | SECRET | TOP_SECRET
+      decision_json: string    # CEO Decision Output Schema
+      summary: array
+      sections: array          # {heading, paragraphs[], bullets[], table{columns[], rows[][]}}
+      slides: array            # {title, message, bullets[], table, notes}
+    output:
+      files: array
+      directory: string
+
   - name: quality_gate
     purpose: Score decision quality and identify dimensions requiring revision.
     input:
