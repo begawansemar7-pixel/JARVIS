@@ -1,16 +1,22 @@
 """Policy gateway for keeping sensitive context on approved runtimes."""
 from __future__ import annotations
 
-LEVELS = {"PUBLIC": 0, "INTERNAL": 1, "CONFIDENTIAL": 2, "SECRET": 3, "TOP_SECRET": 4}
-
-CLOUD_MAX = LEVELS["CONFIDENTIAL"]
+from .private_brain import Classification
 
 
-def route(classification: str, *, private_runtime: bool = False) -> str:
-    """Select a runtime without ever routing SECRET/TOP_SECRET to cloud by default."""
-    level = LEVELS.get(classification.upper(), 99)
-    if level > CLOUD_MAX:
+def route(
+    classification: str | Classification,
+    *,
+    private_runtime: bool = False,
+    max_cloud: Classification = Classification.CONFIDENTIAL,
+) -> str:
+    """Select a runtime without ever routing above `max_cloud` to cloud."""
+    try:
+        level = Classification.parse(classification)
+    except ValueError:
+        level = None  # unknown labels are treated as the most restrictive
+    if level is None or level > max_cloud:
         if not private_runtime:
-            raise PermissionError("SECRET/TOP_SECRET requires a private runtime")
+            raise PermissionError(f"classification above {max_cloud.name} requires a private runtime")
         return "private"
     return "cloud"

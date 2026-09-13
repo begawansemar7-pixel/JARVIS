@@ -12,6 +12,16 @@
   "require_role_match_when_roles_are_declared": true,
   "log_content": false,
   "log_access_decisions": true,
+  "local_principal": {
+    "subject": "owner",
+    "roles": ["OWNER"],
+    "clearance": "TOP_SECRET"
+  },
+  "storage": {
+    "vault_dir": "memory/private_brain/vault",
+    "audit_log": "memory/private_brain/audit.jsonl",
+    "keychain_service": "jarvis.private_brain"
+  },
   "principles": [
     "deny_by_default",
     "authorize_before_retrieval_context",

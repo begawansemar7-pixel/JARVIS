@@ -8,7 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
-LEVELS = {"PUBLIC": 0, "INTERNAL": 1, "CONFIDENTIAL": 2, "SECRET": 3, "TOP_SECRET": 4}
+from .private_brain import Classification
+
 
 @dataclass(frozen=True)
 class KnowledgeChunk:
@@ -19,6 +20,7 @@ class KnowledgeChunk:
     source: str | None = None
     score: float = 0.0
 
+
 @dataclass(frozen=True)
 class Principal:
     subject: str
@@ -26,9 +28,16 @@ class Principal:
     clearance: str = "INTERNAL"
 
 
+def _level(label: str, unknown: int) -> int:
+    try:
+        return int(Classification.parse(label))
+    except ValueError:
+        return unknown
+
+
 def authorized(principal: Principal, chunk: KnowledgeChunk) -> bool:
     """Return whether a principal may receive this chunk as model context."""
-    if LEVELS.get(principal.clearance, -1) < LEVELS.get(chunk.classification, 99):
+    if _level(principal.clearance, -1) < _level(chunk.classification, 99):
         return False
     if chunk.allowed_roles and principal.role not in chunk.allowed_roles:
         return False
