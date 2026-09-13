@@ -1,0 +1,146 @@
+version: "1.0"
+name: CEO Decision Tools
+description: Structured tools for CEO-level strategic decision intelligence.
+
+principles:
+  evidence_layer: FACT | INFERENCE | ASSUMPTION | HYPOTHESIS | UNKNOWN
+  wisdom_layer: I_CHING_INSPIRED
+  governance_layer: ACCOUNTABILITY | TRUST | ETHICS | COMPLIANCE
+  action_layer: EXECUTION | KPI | KRI | TRIGGER | DECISION_GATE
+
+policies:
+  - Never fabricate evidence.
+  - Mark missing material information as [DATA GAP].
+  - I Ching is philosophical only; never use it as prediction.
+  - Do not produce an unranked option list when a decision is required.
+  - Surface uncertainty, reversibility, and second-order effects.
+
+tools:
+  - name: frame_decision
+    purpose: Define the decision question, owner, deadline, objective, constraints, and consequence of inaction.
+    input:
+      decision_context: string
+      decision_owner: string
+      deadline: string
+      objective: string
+      constraints: array
+    output: decision_frame
+
+  - name: diagnose_situation
+    purpose: Separate current-state facts, inferences, assumptions, hypotheses, and unknowns.
+    input:
+      context: string
+      evidence: array
+    output: situation_diagnosis
+
+  - name: assess_change
+    purpose: Identify the strategic change vector and emerging opportunities, threats, constraints, and discontinuities.
+    input:
+      current_state: object
+      external_signals: array
+    output: change_vector
+
+  - name: assess_strategic_phase
+    purpose: Apply an I Ching-inspired strategic phase metaphor without predictive claims.
+    input:
+      situation: object
+      change_vector: array
+    output:
+      pattern: string
+      rationale: string
+      confidence: number
+
+  - name: analyze_yin_yang
+    purpose: Identify strategic tensions, dominant forces, imbalance, and balancing mechanisms.
+    input:
+      decision: string
+      tensions: array
+    output: yin_yang_analysis
+
+  - name: assess_timing
+    purpose: Determine whether to act, pilot, prepare, defer, or exit based on urgency, readiness, reversibility, and cost of waiting.
+    input:
+      opportunity: string
+      readiness: object
+      urgency: number
+      reversibility: number
+      cost_of_waiting: number
+    output:
+      classification: ACT_NOW | PILOT_NOW | WAIT_AND_PREPARE | DEFER | EXIT
+      rationale: string
+      confidence: number
+
+  - name: generate_options
+    purpose: Generate and frame strategically distinct decision alternatives.
+    input:
+      decision_question: string
+      constraints: array
+      minimum_options: number
+    output: options
+
+  - name: score_options
+    purpose: Compare options across strategy, value, evidence, timing, capability, finance, risk, reversibility, stakeholders, governance, and complexity.
+    input:
+      options: array
+      criteria: array
+    output: option_comparison
+
+  - name: second_order_analysis
+    purpose: Analyze consequences beyond the immediate first-order outcome.
+    input:
+      option: object
+      stakeholders: array
+      time_horizon: string
+    output: second_order_effects
+
+  - name: run_premortem
+    purpose: Assume the decision failed and identify failure modes, weak assumptions, early signals, and mitigations.
+    input:
+      recommended_option: object
+      assumptions: array
+    output: premortem
+
+  - name: governance_test
+    purpose: Test legitimacy, accountability, trust, ethics, compliance, conflicts, and decision rights.
+    input:
+      decision: object
+      stakeholders: array
+    output: governance_assessment
+
+  - name: define_decision_triggers
+    purpose: Define measurable thresholds that cause acceleration, continuation, adaptation, pause, or exit.
+    input:
+      decision: object
+      kpis: array
+      kris: array
+    output: decision_triggers
+
+  - name: synthesize_ceo_decision
+    purpose: Produce one CEO recommendation with rationale, timing, assumptions, risks, mitigations, and explicit non-actions.
+    input:
+      analysis: object
+    output: ceo_decision
+
+  - name: build_execution_roadmap
+    purpose: Translate the decision into 30/90/180-day actions, owners, milestones, KPIs, KRIs, and decision gates.
+    input:
+      decision: object
+      recommendation: object
+    output: execution_roadmap
+
+  - name: build_board_presentation
+    purpose: Convert the decision analysis into a 12–18 slide executive narrative.
+    input:
+      decision_analysis: object
+      audience: string
+      slide_count: number
+    output: presentation_outline
+
+  - name: quality_gate
+    purpose: Score decision quality and identify dimensions requiring revision.
+    input:
+      decision_analysis: object
+    output:
+      scores: object
+      weaknesses: array
+      pass: boolean
