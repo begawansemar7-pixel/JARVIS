@@ -19,6 +19,16 @@ def test_deduplicate_keeps_highest_score():
     assert max(x["score"] for x in out) == 90
 
 
+def test_deduplicate_collapses_same_title_with_different_urls():
+    items = [
+        {"url": "https://a.com/story", "title": "Same headline", "score": 80},
+        {"url": "https://b.com/story-copy", "title": "Same headline", "score": 70},
+    ]
+    out = nb.deduplicate(items)
+    assert len(out) == 1
+    assert out[0]["score"] == 80
+
+
 def test_cluster_events_groups_similar_headlines():
     items = [
         {"title": "Telkom spin off fiber business to unlock value", "score": 90, "source": "A"},
@@ -28,6 +38,7 @@ def test_cluster_events_groups_similar_headlines():
     clusters = nb.cluster_events(items)
     assert len(clusters) == 2
     assert max(len(c["items"]) for c in clusters) == 2
+    assert max(c["confirmation"] for c in clusters) > 0.5
 
 
 def test_score_prefers_authoritative_source():
@@ -66,3 +77,9 @@ def test_collect_news_covers_all_categories(monkeypatch):
 
     assert calls == list(nb.CATEGORY_ORDER)
     assert set(result) == set(nb.CATEGORY_ORDER)
+
+
+def test_news_briefing_handles_invalid_max_items(monkeypatch):
+    monkeypatch.setattr(nb, "collect_news", lambda max_per_category: {c: [] for c in nb.CATEGORY_ORDER})
+    text = nb.news_briefing({"max_items": "not-a-number"})
+    assert "NEWS INTELLIGENCE BRIEFING" in text
