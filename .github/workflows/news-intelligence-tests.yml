@@ -1,0 +1,26 @@
+name: News Intelligence Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'actions/news_briefing.py'
+      - 'config/news_*.json'
+      - 'config/news_executive_prompt.md'
+      - 'tests/test_news_briefing.py'
+      - 'actions/web_search.py'
+
+jobs:
+  test-news-intelligence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependency
+        run: python -m pip install --upgrade pip pytest
+      - name: Run News Intelligence tests
+        run: python -m pytest -q tests/test_news_briefing.py
