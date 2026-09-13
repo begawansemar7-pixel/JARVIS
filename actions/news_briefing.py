@@ -1,9 +1,4 @@
-"""JARVIS News Intelligence Engine.
-
-Fetches current news through the existing web-search backend, then applies
-category-aware scoring, URL/title deduplication, event clustering, and an
-executive-oriented rendering layer. No new third-party dependency is required.
-"""
+"""JARVIS News Intelligence Engine."""
 from __future__ import annotations
 
 import hashlib
@@ -53,8 +48,7 @@ def _similarity(a: str, b: str) -> float:
 
 
 def _fingerprints(item: dict) -> set[str]:
-    """Return URL and title fingerprints so duplicate stories are collapsed even
-    when two publishers expose different URLs for the same headline."""
+    """Return URL and title fingerprints for cross-publisher deduplication."""
     fingerprints = set()
     url = (item.get("url") or "").split("#", 1)[0].rstrip("/").lower()
     title = _norm(item.get("title", ""))
@@ -66,7 +60,7 @@ def _fingerprints(item: dict) -> set[str]:
 
 
 def _fingerprint(item: dict) -> str:
-    """Return the URL fingerprint when available, preserving the historical API."""
+    """Return URL fingerprint when available, preserving the historical API."""
     url = (item.get("url") or "").split("#", 1)[0].rstrip("/").lower()
     if url:
         return "url:" + hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
@@ -125,7 +119,7 @@ def _score(item: dict, category: str, taxonomy: dict, registry: dict) -> float:
 def deduplicate(items: list[dict]) -> list[dict]:
     """Remove URL/title duplicates while retaining the strongest scored item."""
     kept: list[dict] = []
-    seen: dict[str, int] = {}
+    seen: set[str] = set()
     for item in sorted(items, key=lambda x: x.get("score", 0), reverse=True):
         fps = _fingerprints(item)
         if not fps:
@@ -133,10 +127,8 @@ def deduplicate(items: list[dict]) -> list[dict]:
             continue
         if any(fp in seen for fp in fps):
             continue
-        index = len(kept)
         kept.append(item)
-        for fp in fps:
-            seen[fp] = index
+        seen.update(fps)
     return kept
 
 
@@ -257,13 +249,13 @@ def news_briefing(parameters: dict, response=None, player=None, session_memory=N
 
 TOOL = {
     "name": "news_briefing",
-    "description": (
-        "Executive current-news briefing. Trigger this action for commands such as "
-        '\"what\\'s the news\", \"what is the news\", \"berita hari ini\", \"berita terbaru\", or \"news briefing\". '
-        "Always cover four sections: Trending Indonesia; AI Global; AI Indonesia; and Telecommunications/Telkom Indonesia. "
-        "Use the configured source registry, rank by recency/source authority/topic momentum/cross-source confirmation/strategic relevance, "
-        "deduplicate and cluster repeated coverage, then present concise executive implications and watch-next items."
-    ),
-    "parameters": {"type": "OBJECT", "properties": {"max_items": {"type": "INTEGER", "description": "Maximum number of event clusters per section; default 5."}}, "required": []},
+    "description": "Executive current-news briefing. Trigger for what's the news, what is the news, berita hari ini, berita terbaru, or news briefing. Always cover Trending Indonesia, AI Global, AI Indonesia, and Telecommunications/Telkom Indonesia. Use configured source authority, recency, momentum, cross-source confirmation and topic relevance; deduplicate and cluster repeated coverage; present executive implications and watch-next items.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "max_items": {"type": "INTEGER", "description": "Maximum number of event clusters per section; default 5."}
+        },
+        "required": []
+    },
     "handler": news_briefing,
 }
