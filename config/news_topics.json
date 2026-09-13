@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "categories": {
+    "id_trending": {
+      "label": "Trending Indonesia",
+      "queries": [
+        "Indonesia berita terkini hari ini trending nasional ekonomi teknologi",
+        "Indonesia breaking news hari ini topik terpopuler"
+      ],
+      "keywords": ["Indonesia", "nasional", "pemerintah", "ekonomi", "politik", "teknologi", "bencana", "regulasi"]
+    },
+    "ai_global": {
+      "label": "AI Global",
+      "queries": [
+        "latest artificial intelligence AI generative AI agents foundation models today",
+        "AI regulation chips models agents OpenAI Anthropic Google Microsoft Meta China today"
+      ],
+      "keywords": ["AI", "artificial intelligence", "LLM", "agent", "model", "inference", "GPU", "AI regulation", "AI safety"]
+    },
+    "ai_indonesia": {
+      "label": "AI Indonesia",
+      "queries": [
+        "Indonesia AI artificial intelligence Komdigi BRIN government today",
+        "Indonesia sovereign AI LLM data center AI regulation talent today"
+      ],
+      "keywords": ["Indonesia", "AI", "Komdigi", "BRIN", "sovereign AI", "LLM", "data center", "talent", "regulation"]
+    },
+    "telecom_telkom": {
+      "label": "Telekomunikasi & Telkom",
+      "queries": [
+        "Telkom Indonesia Telkomsel telecom fiber 5G data center cloud AI today",
+        "TelkomGroup TLKM strategic holding fiber data center network B2B today"
+      ],
+      "keywords": ["Telkom", "Telkomsel", "TLKM", "IndiHome", "fiber", "5G", "broadband", "data center", "NeutraDC", "Telkomsigma", "Telkomsat", "Mitratel", "cloud", "B2B", "network", "AI"]
+    }
+  },
+  "telkom_watchlist": [
+    "Telkom Indonesia", "Telkomsel", "IndiHome", "NeutraDC", "Telkomsigma", "Telkomsat", "Mitratel", "fiber", "5G", "broadband", "data center", "cloud", "AI", "cybersecurity", "B2B ICT", "network", "satellite", "strategic holding", "TLKM30"
+  ]
+}
