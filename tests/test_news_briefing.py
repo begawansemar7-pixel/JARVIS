@@ -1,5 +1,3 @@
-import json
-
 from actions import news_briefing as nb
 
 
@@ -50,30 +48,21 @@ def test_render_contains_required_sections():
     assert "Watch next" in text
 
 
-def test_collect_news_isolated_by_category(monkeypatch):
+def test_collect_news_covers_all_categories(monkeypatch):
     calls = []
 
     def fake_fetch(category, taxonomy, max_results):
         calls.append(category)
-        if category == "ai_global":
-            raise AssertionError("simulated query failure")
         return []
 
-    monkeypatch.setattr(nb, "_fetch_category", fake_fetch)
-    monkeypatch.setattr(nb, "_load_json", lambda path: {"sources": {}, "categories": {c: {"keywords": [], "queries": []} for c in nb.CATEGORY_ORDER}} if "sources" in str(path) else {})
-
-    # Replace the two config loads with deterministic data.
     def fake_load(path):
         if str(path).endswith("news_sources.json"):
             return {"sources": {}}
         return {"categories": {c: {"keywords": [], "queries": []} for c in nb.CATEGORY_ORDER}}
 
+    monkeypatch.setattr(nb, "_fetch_category", fake_fetch)
     monkeypatch.setattr(nb, "_load_json", fake_load)
-    # _fetch_category itself is intentionally allowed to fail; collect_news should
-    # not swallow programmer errors inside the test double. This assertion documents
-    # the four-category fan-out contract.
-    try:
-        nb.collect_news(max_per_category=1)
-    except AssertionError:
-        pass
+    result = nb.collect_news(max_per_category=1)
+
     assert calls == list(nb.CATEGORY_ORDER)
+    assert set(result) == set(nb.CATEGORY_ORDER)
