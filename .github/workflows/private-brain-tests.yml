@@ -4,26 +4,33 @@ on:
   push:
     paths:
       - 'knowledge/**'
-      - 'tests/test_private_brain.py'
+      - 'actions/private_brain.py'
+      - 'config/private_brain.json'
+      - 'tests/test_private_brain*.py'
       - 'tests/test_vault.py'
-      - 'tests/test_private_brain_rag.py'
+      - 'requirements*.txt'
       - '.github/workflows/private-brain-tests.yml'
   pull_request:
     paths:
       - 'knowledge/**'
-      - 'tests/test_private_brain.py'
+      - 'actions/private_brain.py'
+      - 'config/private_brain.json'
+      - 'tests/test_private_brain*.py'
       - 'tests/test_vault.py'
-      - 'tests/test_private_brain_rag.py'
+      - 'requirements*.txt'
       - '.github/workflows/private-brain-tests.yml'
 
 jobs:
   test-private-brain:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: pip install cryptography pytest
-      - run: pytest -q tests/test_private_brain.py tests/test_vault.py tests/test_private_brain_rag.py
+      - run: pip install cryptography keyring -r requirements-dev.txt
+      - run: pytest -q tests/test_private_brain*.py tests/test_vault.py

@@ -32,6 +32,9 @@ fastapi
 uvicorn[standard]
 cryptography
 python-multipart
+
+# Private Brain: vault key lives in the OS credential store (Keychain etc.)
+keyring
 qrcode[pil]
 
 # Plugin extras: Gmail / Google Calendar (OAuth)
