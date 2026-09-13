@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "default_weight": 0.5,
+  "tiers": [
+    {
+      "tier": "T1",
+      "label": "Primary / official",
+      "weight": 1.0,
+      "domains": [
+        ".go.id", ".gov", ".gov.uk", ".gov.sg", ".gov.au", ".europa.eu", ".mil",
+        "bps.go.id", "bi.go.id", "ojk.go.id", "idx.co.id", "komdigi.go.id", "kemenkeu.go.id",
+        "sec.gov", "worldbank.org", "imf.org", "oecd.org", "un.org", "itu.int", "wto.org",
+        "adb.org", "bis.org", "iea.org"
+      ]
+    },
+    {
+      "tier": "T2",
+      "label": "Research institution / industry body / advisory",
+      "weight": 0.85,
+      "domains": [
+        ".ac.id", ".edu", "nber.org", "brookings.edu", "weforum.org", "gsma.com", "gsmaintelligence.com",
+        "mckinsey.com", "bcg.com", "bain.com", "kearney.com", "deloitte.com", "pwc.com", "ey.com",
+        "kpmg.com", "accenture.com", "gartner.com", "idc.com", "oliverwyman.com", "rolandberger.com",
+        "brin.go.id", "lpem.org", "csis.or.id", "ieee.org", "nature.com", "sciencedirect.com"
+      ]
+    },
+    {
+      "tier": "T3",
+      "label": "Tier-1 business media",
+      "weight": 0.75,
+      "domains": [
+        "reuters.com", "bloomberg.com", "ft.com", "wsj.com", "economist.com", "asia.nikkei.com",
+        "apnews.com", "cnbc.com", "kontan.co.id", "bisnis.com", "katadata.co.id", "cnbcindonesia.com",
+        "kompas.com", "tempo.co", "antaranews.com", "thejakartapost.com", "techinasia.com"
+      ]
+    },
+    {
+      "tier": "T4",
+      "label": "Syndicated market research (opaque methodology — verify against primary data)",
+      "weight": 0.6,
+      "domains": [
+        "statista.com", "mordorintelligence.com", "imarcgroup.com", "researchandmarkets.com",
+        "grandviewresearch.com", "marketsandmarkets.com", "fortunebusinessinsights.com",
+        "alliedmarketresearch.com", "precedenceresearch.com", "nextmsc.com", "expertmarketresearch.com"
+      ]
+    },
+    {
+      "tier": "T5",
+      "label": "User-generated / low editorial control",
+      "weight": 0.3,
+      "domains": [
+        "medium.com", "blogspot.com", "wordpress.com", "quora.com", "reddit.com", "pinterest.com",
+        "tiktok.com", "facebook.com", "x.com", "twitter.com", "scribd.com", "slideshare.net"
+      ]
+    }
+  ]
+}
