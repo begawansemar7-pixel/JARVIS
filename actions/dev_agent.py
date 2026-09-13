@@ -20,7 +20,7 @@ TOOL = {
     "description": (
         "JARVIS Software Engineering Agent. Inspects a repository, builds a compact code map, "
         "plans changes, writes code, runs verification, repairs failures, records an engineering "
-        "session, and supports plan/review/test/build modes. JARVIS repository self-modification is "
+        "session, and supports plan/review/build modes. JARVIS repository self-modification is "
         "blocked unless explicitly authorized by JARVIS_SWE_ALLOW_REPO_WRITE=1."
     ),
     "parameters": {
@@ -44,7 +44,7 @@ TOOL = {
             },
             "mode": {
                 "type": "STRING",
-                "description": "plan | review | build | test; build is the default"
+                "description": "plan | review | build; build is the default"
             },
             "timeout": {
                 "type": "INTEGER",
