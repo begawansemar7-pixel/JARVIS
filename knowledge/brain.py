@@ -2,11 +2,12 @@
 
 Flow for every search:
 
-    ACL filter (metadata only) -> decrypt authorized docs locally -> chunk & score
-    -> cloud boundary (gateway.route) -> provenance-tagged excerpts
+    ACL filter (metadata only) -> decrypt / extract authorized docs locally
+    -> chunk & score -> cloud boundary (gateway.route) -> provenance-tagged excerpts
 
-Both the documents and the index (titles, roles, provenance) are stored as
-ciphertext. Nothing in this module logs content, titles or queries.
+Documents come from two places: the encrypted vault (ingested copies, with an
+encrypted index) and configured reference folders, which are read in place.
+Nothing in this module logs content, titles or queries.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from .ingest import ingest_text
 from .keys import load_vault_key
 from .private_brain import AccessContext, Classification, KnowledgeDocument, filter_authorized
 from .rag import KnowledgeChunk
+from .reference import ExtractionError, ReferenceLibrary, is_reference
 from .vault import EncryptedVault
 
 INDEX_ID = "_index"
@@ -95,6 +97,7 @@ class PrivateBrain:
         self.vault = vault
         self.audit = audit
         self._lock = threading.RLock()
+        self.references = ReferenceLibrary(config.reference_folders, owner=config.principal.subject)
 
     @classmethod
     def open(cls, config: PrivateBrainConfig | None = None, key: bytes | None = None) -> "PrivateBrain":
@@ -112,6 +115,17 @@ class PrivateBrain:
     def _save_index(self, index: dict[str, KnowledgeDocument]) -> None:
         payload = {"documents": [_doc_to_dict(d) for d in index.values()]}
         self.vault.put(INDEX_ID, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+    def _all_documents(self) -> dict[str, KnowledgeDocument]:
+        docs = self._load_index()
+        for ref in self.references.documents():
+            docs.setdefault(ref.document_id, ref)
+        return docs
+
+    def _read_text(self, doc: KnowledgeDocument) -> str:
+        if is_reference(doc):
+            return self.references.text(doc)
+        return self.vault.get(doc.document_id).decode("utf-8")
 
     def _event(self, context: AccessContext, doc_id: str, action: str, decision: str,
                reason: str, classification: str = "") -> None:
@@ -182,8 +196,8 @@ class PrivateBrain:
     def list_documents(self, context: AccessContext | None = None) -> list[KnowledgeDocument]:
         ctx = context or self.config.principal
         with self._lock:
-            index = self._load_index()
-        return self._authorized(ctx, index.values(), "list")
+            docs = self._all_documents()
+        return self._authorized(ctx, docs.values(), "list")
 
     def search(self, query: str, *, context: AccessContext | None = None, limit: int = 5) -> SearchResult:
         ctx = context or self.config.principal
@@ -191,11 +205,15 @@ class PrivateBrain:
         if not q:
             return SearchResult([], 0)
         with self._lock:
-            index = self._load_index()
-            authorized = self._authorized(ctx, index.values(), "search")
+            docs = self._all_documents()
+            authorized = self._authorized(ctx, docs.values(), "search")
             scored: list[SearchHit] = []
             for doc in authorized:
-                text = self.vault.get(doc.document_id).decode("utf-8")
+                try:
+                    text = self._read_text(doc)
+                except ExtractionError as e:
+                    self._event(ctx, doc.document_id, "retrieve", "skip", str(e), doc.classification.name)
+                    continue
                 for piece in _chunks(text):
                     overlap = len(q & _tokens(piece))
                     if overlap:
@@ -218,7 +236,7 @@ class PrivateBrain:
             if len(hits) < limit:
                 hits.append(hit)
         for doc_id in {h.document.document_id for h in hits}:
-            self._event(ctx, doc_id, "retrieve", "allow", "cloud_context", index[doc_id].classification.name)
+            self._event(ctx, doc_id, "retrieve", "allow", "cloud_context", docs[doc_id].classification.name)
         return SearchResult(hits, withheld)
 
     def delete(self, document_id: str, context: AccessContext | None = None) -> bool:
@@ -229,6 +247,8 @@ class PrivateBrain:
             index = self._load_index()
             doc = index.get(document_id)
             if doc is None:
+                if document_id.startswith("ref-"):
+                    raise ValueError("reference-folder files are removed by deleting them from the folder")
                 return False
             if doc.owner != ctx.subject:
                 self._event(ctx, document_id, "delete", "deny", "not_owner", doc.classification.name)

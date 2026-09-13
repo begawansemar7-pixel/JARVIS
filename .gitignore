@@ -10,3 +10,6 @@ config/api_keys.json
 
 # Private Brain data (encrypted vault + audit log) — never commit
 memory/private_brain/
+
+# macOS
+.DS_Store

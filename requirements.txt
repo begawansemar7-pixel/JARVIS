@@ -35,6 +35,8 @@ python-multipart
 
 # Private Brain: vault key lives in the OS credential store (Keychain etc.)
 keyring
+# Private Brain: read PDFs in reference folders (Documents/TempJarvis)
+pypdf
 qrcode[pil]
 
 # Plugin extras: Gmail / Google Calendar (OAuth)

@@ -14,6 +14,7 @@ from knowledge.private_brain import AccessContext, Classification
 @pytest.fixture
 def brain(tmp_path):
     raw = json.loads(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
+    raw["reference_folders"] = []  # never touch the real ~/Documents/TempJarvis in tests
     cfg = parse_config(raw, tmp_path)
     return PrivateBrain.open(cfg, key=Fernet.generate_key())
 

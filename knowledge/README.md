@@ -38,6 +38,18 @@ JARVIS uses the Private Brain through the `private_brain` action (`actions/priva
 | `audit.py` | `AuditLogger` — append-only JSONL, file mode 0600, ids/decisions/reasons only |
 | `brain.py` | `PrivateBrain` service: encrypted documents *and* encrypted index, retrieval, deletion |
 
+### Reference folders (`~/Documents/TempJarvis`)
+
+Files placed in a configured reference folder are read **in place**: never copied into the vault, never cached on disk, never modified or deleted by JARVIS. Supported: `.txt .md .markdown .csv .json .docx .pptx .pdf` (≤ 25 MB each, ≤ 1000 files per folder). Changes are picked up on the next search.
+
+| Location | Classification | Reaches the live (cloud) model? |
+|---|---|---|
+| `TempJarvis/…` | folder level from config (default `CONFIDENTIAL`) | Yes — excerpts matching a search |
+| `TempJarvis/SECRET/…` | `SECRET` | No — counted as withheld only |
+| `TempJarvis/TOP_SECRET/…` | `TOP_SECRET` | No — counted as withheld only |
+
+A top-level subfolder named after a level can only **raise** the classification. Hidden files, Office lock files (`~$…`), symlinks, password-protected and unreadable files are skipped. `forget` refuses reference files; remove the file from the folder instead. Add more folders, or restrict one to roles, under `reference_folders` in `config/private_brain.json`.
+
 Local data lives in `memory/private_brain/` (git-ignored). Configure the local principal, storage paths and cloud limit in `config/private_brain.json`; invalid levels or `log_content: true` are rejected at load time.
 
 Known limits: retrieval is keyword-based (no embeddings yet), there is no private runtime, so `SECRET`/`TOP_SECRET` content is never returned to the live model, and the conversation itself (including excerpts the model has seen) is governed by the general memory rules, not by this package.
