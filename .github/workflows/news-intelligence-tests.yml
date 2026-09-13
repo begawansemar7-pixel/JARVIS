@@ -5,10 +5,11 @@ on:
     branches: [main]
     paths:
       - 'actions/news_briefing.py'
+      - 'actions/web_search.py'
       - 'config/news_*.json'
       - 'config/news_executive_prompt.md'
       - 'tests/test_news_briefing.py'
-      - 'actions/web_search.py'
+      - 'tests/test_web_search.py'
 
 jobs:
   test-news-intelligence:
@@ -23,4 +24,4 @@ jobs:
       - name: Install test dependency
         run: python -m pip install --upgrade pip pytest
       - name: Run News Intelligence tests
-        run: python -m pytest -q tests/test_news_briefing.py
+        run: python -m pytest -q tests/test_news_briefing.py tests/test_web_search.py
