@@ -38,3 +38,35 @@ def test_ddg_news_falls_back_to_rss(monkeypatch):
     result = ws._ddg_news("test", max_results=3)
     assert result[0]["title"] == "RSS fallback headline"
     assert result[0]["url"] == "https://example.com/rss"
+
+
+def test_gemini_quota_error_pauses_grounded_search(monkeypatch):
+    import sys
+    import types
+
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            raise RuntimeError("429 RESOURCE_EXHAUSTED. quota exceeded")
+
+    class FakeClient:
+        def __init__(self, api_key):
+            self.models = FakeModels()
+
+    fake_google = types.ModuleType("google")
+    fake_genai = types.ModuleType("google.genai")
+    fake_genai.Client = FakeClient
+    fake_google.genai = fake_genai
+    monkeypatch.setitem(sys.modules, "google", fake_google)
+    monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
+    monkeypatch.setattr(ws, "_get_api_key", lambda: "key")
+    monkeypatch.setattr(ws, "_gemini_blocked_until", 0.0)
+
+    import pytest
+    with pytest.raises(RuntimeError, match="429"):
+        ws._gemini_search("news")
+    with pytest.raises(RuntimeError, match="paused"):
+        ws._gemini_search("news again")
+    assert len(calls) == 1

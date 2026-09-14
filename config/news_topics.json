@@ -1,40 +1,131 @@
 {
-  "version": 1,
+  "version": 2,
+  "stock": {
+    "symbol": "TLKM.JK",
+    "display": "TLKM",
+    "name": "PT Telkom Indonesia (Persero) Tbk",
+    "exchange_timezone": "Asia/Jakarta"
+  },
   "categories": {
-    "id_trending": {
-      "label": "Trending Indonesia",
+    "telkom_stock": {
+      "label": "Saham Telkom (TLKM)",
+      "max_age_hours": 72,
       "queries": [
-        "Indonesia berita terkini hari ini trending nasional ekonomi teknologi",
-        "Indonesia breaking news hari ini topik terpopuler"
+        "saham TLKM",
+        "saham Telkom Indonesia TLKM"
       ],
-      "keywords": ["Indonesia", "nasional", "pemerintah", "ekonomi", "politik", "teknologi", "bencana", "regulasi"]
+      "keywords": [
+        "TLKM",
+        "saham",
+        "Telkom",
+        "IHSG",
+        "harga",
+        "dividen",
+        "investor",
+        "asing",
+        "target harga",
+        "shares",
+        "stock"
+      ],
+      "locale": "id",
+      "required_any": [
+        "TLKM",
+        "Telkom"
+      ]
     },
-    "ai_global": {
-      "label": "AI Global",
+    "telkom_news": {
+      "label": "Berita Telkom Indonesia",
+      "max_age_hours": 96,
       "queries": [
-        "latest artificial intelligence AI generative AI agents foundation models today",
-        "AI regulation chips models agents OpenAI Anthropic Google Microsoft Meta China today"
+        "Telkom Indonesia",
+        "Telkomsel OR IndiHome OR TelkomGroup"
       ],
-      "keywords": ["AI", "artificial intelligence", "LLM", "agent", "model", "inference", "GPU", "AI regulation", "AI safety"]
+      "keywords": [
+        "Telkom",
+        "Telkomsel",
+        "TLKM",
+        "IndiHome",
+        "TelkomGroup",
+        "NeutraDC",
+        "Telkomsigma",
+        "Telkomsat",
+        "Mitratel",
+        "fiber",
+        "5G",
+        "data center",
+        "cloud",
+        "AI"
+      ],
+      "locale": "id",
+      "required_any": [
+        "Telkom",
+        "Telkomsel",
+        "TLKM",
+        "IndiHome",
+        "TelkomGroup",
+        "NeutraDC",
+        "Telkomsigma",
+        "Mitratel",
+        "Telkomsat"
+      ]
     },
-    "ai_indonesia": {
-      "label": "AI Indonesia",
+    "ai_trending": {
+      "label": "Trending Topik AI",
+      "max_age_hours": 48,
       "queries": [
-        "Indonesia AI artificial intelligence Komdigi BRIN government today",
-        "Indonesia sovereign AI LLM data center AI regulation talent today"
+        "artificial intelligence",
+        "AI OpenAI OR Anthropic OR Nvidia OR Google Gemini"
       ],
-      "keywords": ["Indonesia", "AI", "Komdigi", "BRIN", "sovereign AI", "LLM", "data center", "talent", "regulation"]
-    },
-    "telecom_telkom": {
-      "label": "Telekomunikasi & Telkom",
-      "queries": [
-        "Telkom Indonesia Telkomsel telecom fiber 5G data center cloud AI today",
-        "TelkomGroup TLKM strategic holding fiber data center network B2B today"
+      "keywords": [
+        "AI",
+        "artificial intelligence",
+        "kecerdasan buatan",
+        "LLM",
+        "model",
+        "agent",
+        "OpenAI",
+        "Anthropic",
+        "Gemini",
+        "Nvidia",
+        "GPU",
+        "chip",
+        "regulation",
+        "regulasi"
       ],
-      "keywords": ["Telkom", "Telkomsel", "TLKM", "IndiHome", "fiber", "5G", "broadband", "data center", "NeutraDC", "Telkomsigma", "Telkomsat", "Mitratel", "cloud", "B2B", "network", "AI"]
+      "locale": "en",
+      "required_any": [
+        "AI",
+        "artificial intelligence",
+        "kecerdasan buatan",
+        "OpenAI",
+        "Anthropic",
+        "Gemini",
+        "Nvidia",
+        "LLM",
+        "ChatGPT",
+        "Claude"
+      ]
     }
   },
   "telkom_watchlist": [
-    "Telkom Indonesia", "Telkomsel", "IndiHome", "NeutraDC", "Telkomsigma", "Telkomsat", "Mitratel", "fiber", "5G", "broadband", "data center", "cloud", "AI", "cybersecurity", "B2B ICT", "network", "satellite", "strategic holding", "TLKM30"
+    "Telkom Indonesia",
+    "Telkomsel",
+    "IndiHome",
+    "NeutraDC",
+    "Telkomsigma",
+    "Telkomsat",
+    "Mitratel",
+    "fiber",
+    "5G",
+    "broadband",
+    "data center",
+    "cloud",
+    "AI",
+    "cybersecurity",
+    "B2B ICT",
+    "network",
+    "satellite",
+    "strategic holding",
+    "TLKM30"
   ]
 }
