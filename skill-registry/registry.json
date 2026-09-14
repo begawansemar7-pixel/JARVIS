@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "skills": [
+    {
+      "name": "example-skill",
+      "version": "1.0.0",
+      "category": "builtin",
+      "path": "builtin/example-skill",
+      "status": "ACTIVE",
+      "manifest": {
+        "name": "example-skill",
+        "version": "1.0.0",
+        "category": "builtin",
+        "description": "Reference skill package used to validate the Skill Runtime.",
+        "triggers": ["example skill", "skill runtime"],
+        "risk_level": "low",
+        "requires": {"actions": [], "plugins": []},
+        "outputs": ["structured result"],
+        "governance": {"confirmation": false},
+        "status": "ACTIVE",
+        "author": "JARVIS"
+      }
+    }
+  ]
+}
