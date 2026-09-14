@@ -1,0 +1,29 @@
+name: Meeting Notes Tests
+
+on:
+  push:
+    paths:
+      - 'integrations/**'
+      - 'actions/meeting_notes.py'
+      - 'config/meeting_notes.json'
+      - 'tests/test_meeting_notes.py'
+      - '.github/workflows/meeting-notes-tests.yml'
+  pull_request:
+    paths:
+      - 'integrations/**'
+      - 'actions/meeting_notes.py'
+      - 'config/meeting_notes.json'
+      - 'tests/test_meeting_notes.py'
+      - '.github/workflows/meeting-notes-tests.yml'
+
+jobs:
+  test-meeting-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install requests pytest
+      - run: python -m pytest -q tests/test_meeting_notes.py

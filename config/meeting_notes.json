@@ -1,0 +1,9 @@
+{
+  "flush_interval_seconds": 20,
+  "flush_min_turns": 6,
+  "sensitive_tools": ["private_brain"],
+  "local_backup": true,
+  "backup_dir": "~/Documents/JARVIS/Meetings",
+  "summary_model": "gemini-flash-latest",
+  "max_summary_characters": 60000
+}
