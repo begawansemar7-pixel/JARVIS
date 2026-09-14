@@ -19,11 +19,12 @@ class SkillRegistry:
             raise ValueError(f"cannot register invalid skill: {record.error}")
         if record.skill_id in self._records:
             raise ValueError(f"duplicate skill identity: {record.skill_id}")
-        existing = self._by_name.get(record.manifest.name)
-        if existing is not None and existing.manifest.version == record.manifest.version:
-            raise ValueError(f"duplicate skill version: {record.skill_id}")
-        # Registry exposes one active record per name. Non-active versions remain
-        # addressable by skill_id in the full record set.
+        if record.manifest.status == "ACTIVE" and record.manifest.name in self._by_name:
+            current = self._by_name[record.manifest.name]
+            raise ValueError(
+                f"multiple ACTIVE versions for {record.manifest.name}: "
+                f"{current.manifest.version} and {record.manifest.version}"
+            )
         self._records[record.skill_id] = record
         if record.manifest.status == "ACTIVE":
             self._by_name[record.manifest.name] = record
