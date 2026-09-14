@@ -18,6 +18,11 @@
   <string>APPL</string>
   <key>CFBundleIconFile</key>
   <string>JARVIS</string>
+  <key>LSArchitecturePriority</key>
+  <array>
+    <string>arm64</string>
+    <string>x86_64</string>
+  </array>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>LSApplicationCategoryType</key>

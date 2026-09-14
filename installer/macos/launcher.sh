@@ -15,6 +15,15 @@
 
 set -uo pipefail
 
+# LaunchServices may start a script-based app under Rosetta on Apple Silicon. The
+# x86_64 preference is inherited by child processes, so `uname -p` then reports
+# i386 and libraries such as rubicon-objc (used by pyautogui) break. Re-run the
+# launcher natively before doing anything else.
+if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = "1" ] && [ -z "${JARVIS_NATIVE_REEXEC:-}" ]; then
+  export JARVIS_NATIVE_REEXEC=1
+  exec /usr/bin/arch -arm64 /bin/bash "$0" "$@"
+fi
+
 RES_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
 SUPPORT="${JARVIS_SUPPORT_DIR:-$HOME/Library/Application Support/JARVIS}"
 LOGS="${JARVIS_LOG_DIR:-$HOME/Library/Logs/JARVIS}"
@@ -119,5 +128,5 @@ cd "$APP_DIR" || fail "application folder is missing"
 # JARVIS writes its key file world-readable; keep secrets private to this user.
 [ -f "$APP_DIR/config/api_keys.json" ] && chmod 600 "$APP_DIR/config/api_keys.json"
 export PYTHONUNBUFFERED=1
-log "Starting JARVIS ${BUNDLE_VERSION}"
+log "Starting JARVIS ${BUNDLE_VERSION} (arch $(uname -m), processor $(uname -p), translated=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a))"
 exec "$VENV/bin/python" "$APP_DIR/main.py" >>"$LOGS/jarvis.log" 2>&1
