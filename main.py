@@ -135,6 +135,17 @@ def _load_system_prompt() -> str:
             "Never simulate or guess results — always call the appropriate tool."
         )
 
+def _meeting_recorder_call(method: str, *args):
+    """Best-effort bridge to the Notion meeting recorder; never disturbs the live session."""
+    try:
+        from integrations.meeting_notes import get_recorder
+        recorder = get_recorder()
+        attr = getattr(recorder, method)
+        return attr(*args) if callable(attr) else attr
+    except Exception as e:
+        print(f"[MeetingNotes] {method} skipped: {type(e).__name__}: {e}")
+        return None
+
 _CTRL_RE = re.compile(r"<ctrl\d+>", re.IGNORECASE)
 
 def _clean_transcript(text: str) -> str:    
@@ -758,6 +769,7 @@ class JarvisLive:
 
         print(f"[JARVIS] 🔧 {name}  {args}")
         self.ui.set_state("THINKING")
+        _meeting_recorder_call("note_tool", name)   # sensitive tools redact this exchange in meeting notes
 
         if name == "save_memory":
             category = args.get("category", "notes")
@@ -849,6 +861,9 @@ class JarvisLive:
                 self.ui.write_log("SYS: Shutdown requested.")
                 async def _do_shutdown():
                     await self._save_session_summary()
+                    # Finish an open Notion meeting so its summary is written before exit.
+                    if _meeting_recorder_call("active"):
+                        await asyncio.to_thread(_meeting_recorder_call, "stop")
                     if self.session:
                         try:
                             await self.session.send_client_content(
@@ -1076,6 +1091,9 @@ class JarvisLive:
                                         "ts": datetime.now().isoformat(),
                                     }))
                             out_buf = []
+
+                            # Meeting notes (only while the user has started a recording): buffer only.
+                            _meeting_recorder_call("add_exchange", full_in, full_out)
 
                             # Vision injection: model finished tool-response turn → now send the image
                             if self._pending_vision and self.session:
