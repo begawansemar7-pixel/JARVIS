@@ -1,0 +1,29 @@
+name: Software Engineer Engine Tests
+
+on:
+  push:
+    paths:
+      - 'actions/software_engineer.py'
+      - 'engineering/**'
+      - 'config/software_engineer.json'
+      - 'tests/test_software_engineer.py'
+      - '.github/workflows/software-engineer-tests.yml'
+  pull_request:
+    paths:
+      - 'actions/software_engineer.py'
+      - 'engineering/**'
+      - 'config/software_engineer.json'
+      - 'tests/test_software_engineer.py'
+      - '.github/workflows/software-engineer-tests.yml'
+
+jobs:
+  test-software-engineer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q tests/test_software_engineer.py

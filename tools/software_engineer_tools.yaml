@@ -1,0 +1,52 @@
+version: "1.0"
+name: Software Engineer Engine Tools
+description: Delegate engineering work on local git projects to the jcode coding agent inside guarded branches.
+
+principles:
+  roles: JARVIS_ENGINEERING_LEAD | JCODE_EXECUTION_ENGINE
+  modes: IMPLEMENT | PLAN | REVIEW
+  evidence: No success claims before the job report confirms them.
+
+policies:
+  - Only repositories under allowed_roots; clean working tree required.
+  - Work happens on a jarvis/<timestamp>-<task> branch; pushing is blocked while the engine runs.
+  - JARVIS never pushes, merges or deploys; the user owns the merge.
+  - Plan and review modes are read-only; any change is discarded.
+  - Never put secrets or Private Brain content in tasks — prompts and code go to the model provider.
+
+tools:
+  - name: software_engineer.status
+    purpose: Report whether jcode is installed, the provider and the allowed project folders.
+    side_effect: A0
+
+  - name: software_engineer.start
+    purpose: Launch a background engineering job.
+    side_effect: A2 (edits and commands inside the repository on a new branch; undoable)
+    implemented_by: actions/software_engineer.py
+    input:
+      project_path: string
+      task: string            # behaviour + acceptance criteria + verification
+      mode: implement | plan | review
+      context: string
+      timeout_minutes: integer  # default 20, max 60
+    output:
+      job_id: string
+      branch: string
+
+  - name: software_engineer.job
+    purpose: Status and final report of a job (latest when job_id is omitted).
+    side_effect: A0
+    input:
+      job_id: string
+    output:
+      status: queued | running | succeeded | failed | cancelled
+      branch: string
+      commit: string
+      changed_files: array
+      report: "~/Documents/JARVIS/Engineering/<stamp>_<job>_<task>/report.md"
+
+  - name: software_engineer.cancel
+    purpose: Stop a running job (kills the engine process group).
+    side_effect: A1
+    input:
+      job_id: string
