@@ -1,0 +1,17 @@
+{
+  "engine": "jcode",
+  "binary": "jcode",
+  "provider": "gemini",
+  "model": "",
+  "allowed_roots": [
+    "~/Desktop/JarvisProjects",
+    "~/Projects",
+    "~/Developer",
+    "~/Code"
+  ],
+  "default_timeout_minutes": 20,
+  "max_timeout_minutes": 60,
+  "max_turns": 8,
+  "branch_prefix": "jarvis/",
+  "report_dir": "~/Documents/JARVIS/Engineering"
+}
