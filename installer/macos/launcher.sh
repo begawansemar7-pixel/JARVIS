@@ -116,6 +116,8 @@ fi
 rm -rf "$LOCK"
 trap - EXIT
 cd "$APP_DIR" || fail "application folder is missing"
+# JARVIS writes its key file world-readable; keep secrets private to this user.
+[ -f "$APP_DIR/config/api_keys.json" ] && chmod 600 "$APP_DIR/config/api_keys.json"
 export PYTHONUNBUFFERED=1
 log "Starting JARVIS ${BUNDLE_VERSION}"
 exec "$VENV/bin/python" "$APP_DIR/main.py" >>"$LOGS/jarvis.log" 2>&1

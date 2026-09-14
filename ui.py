@@ -4525,7 +4525,11 @@ class _RootShim:
 
 class JarvisUI:
     def __init__(self, face_path: str, size=None):
+        from core.app_identity import apply_native_identity, apply_qt_identity
+
+        apply_native_identity()  # must precede QApplication: menu bar shows JARVIS, not python
         self._app = QApplication.instance() or QApplication(sys.argv)
+        apply_qt_identity(self._app, icon_path=Path(__file__).resolve().parent / "config" / "jarvis.ico")
         self._app.setStyle("Fusion")
         self._win = MainWindow(face_path)
         self.root = _RootShim(self._app)
