@@ -67,7 +67,7 @@ from actions.proactive         import ProactiveEngine
 from actions.background_monitor import (
     add_monitor, remove_monitor, list_monitors, check_all as monitor_check_all,
 )
-from actions.web_search        import _news as _fetch_news_sync
+from actions.news_briefing     import startup_briefing as _fetch_briefing_sync
 from memory.config_manager     import (
     get_brief_enabled, get_voice, get_wake_word_enabled, save_wake_word_enabled,    get_input_device, get_output_device,
 )
@@ -1225,7 +1225,7 @@ class JarvisLive:
 
         # Start fetching news immediately — runs in parallel while phase 1 plays
         loop = asyncio.get_event_loop()
-        news_future = loop.run_in_executor(None, _fetch_news_sync, "top world news today")
+        news_future = loop.run_in_executor(None, _fetch_briefing_sync)   # TLKM quote + Telkom news + AI trends
 
         await asyncio.sleep(0.3)
         if not self.session:
@@ -1296,21 +1296,23 @@ class JarvisLive:
                     await asyncio.sleep(1.0)
 
                 try:
-                    news_text = await asyncio.wait_for(news_done, timeout=4.0)
+                    news_title, news_text = await asyncio.wait_for(news_done, timeout=12.0)
                 except Exception:
-                    news_text = ""
+                    news_title, news_text = "", ""
 
                 if not self.session:
                     return
 
                 if news_text and len(news_text) > 60:
                     # Show on UI content panel immediately
-                    self.ui.show_content("NEWS — top world news today", news_text)
+                    self.ui.show_content(news_title, news_text)
 
                     p2 = (
-                        f"[BRIEFING] Here are today's top news headlines:\n{news_text}\n\n"
-                        "Pick ONE headline, summarise it in one sentence, then say the full list "
-                        f"is displayed on screen. Do not call any tools.{lang_str}"
+                        f"[BRIEFING] Today's briefing on the user's three topics:\n{news_text}\n\n"
+                        "In at most three short sentences: state the TLKM price and its change exactly "
+                        "as given (with the time), one Telkom Indonesia headline, and one trending AI "
+                        "headline; then say the full briefing is on screen. Never invent numbers and give "
+                        f"no investment advice. Do not call any tools.{lang_str}"
                     )
                 else:
                     p2 = (

@@ -26,14 +26,31 @@ def _get_api_key() -> str:
         return json.load(f)["gemini_api_key"]
 
 
+GEMINI_QUOTA_COOLDOWN_SECONDS = 600
+_gemini_blocked_until = 0.0
+
+
 def _gemini_search(query: str) -> str:
+    """Grounded Gemini search. After a quota error (429) Gemini is skipped for a
+    while so every search does not burn a failing request before falling back."""
+    global _gemini_blocked_until
+    import time as _time
+    if _time.monotonic() < _gemini_blocked_until:
+        raise RuntimeError("Gemini search paused after a quota error; using article search")
     from google import genai
     client = genai.Client(api_key=_get_api_key())
-    response = client.models.generate_content(
-        model="gemini-flash-latest",
-        contents=query,
-        config={"tools": [{"google_search": {}}]},
-    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-flash-latest",
+            contents=query,
+            config={"tools": [{"google_search": {}}]},
+        )
+    except Exception as exc:
+        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+            _gemini_blocked_until = _time.monotonic() + GEMINI_QUOTA_COOLDOWN_SECONDS
+            print(f"[WebSearch] Gemini quota exhausted — pausing grounded search for "
+                  f"{GEMINI_QUOTA_COOLDOWN_SECONDS // 60} min")
+        raise
     text = "".join(
         part.text for part in response.candidates[0].content.parts
         if hasattr(part, "text") and part.text
@@ -66,10 +83,17 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
     return results
 
 
-def _google_news_rss(query: str, max_results: int = 8) -> list[dict]:
-    """Dependency-light emergency news backend using Google News RSS."""
+GOOGLE_NEWS_LOCALES = {
+    "en": "hl=en-US&gl=US&ceid=US:en",
+    "id": "hl=id&gl=ID&ceid=ID:id",
+}
+
+
+def _google_news_rss(query: str, max_results: int = 8, locale: str = "en") -> list[dict]:
+    """Dependency-light news backend using Google News RSS (dated articles)."""
     encoded = urllib.parse.quote(query or "world news")
-    url = f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en"
+    params = GOOGLE_NEWS_LOCALES.get(locale, GOOGLE_NEWS_LOCALES["en"])
+    url = f"https://news.google.com/rss/search?q={encoded}&{params}"
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "JARVIS-News/1.0 (+https://github.com/begawansemar7-pixel/JARVIS)"},
