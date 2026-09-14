@@ -1,0 +1,21 @@
+# rsync filter for updating ~/Library/Application Support/JARVIS/app from the bundle.
+# Excluded paths are user data: rsync --delete never removes them and never overwrites them.
+
+# Secrets and local settings
+- /config/api_keys.json
+- /config/certs/
+
+# Memory and personal data
+- /memory/*.json
+- /memory/*.jsonl
+- /memory/private_brain/
+- /uploads/
+
+# User-installed plugins (ship only the package marker and the template)
++ /plugins/__init__.py
++ /plugins/_template.py
+- /plugins/*
+
+# Runtime artefacts
+- __pycache__/
+- .DS_Store
