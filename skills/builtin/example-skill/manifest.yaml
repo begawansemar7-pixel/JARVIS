@@ -1,0 +1,17 @@
+name: example-skill
+version: 1.0.0
+category: builtin
+description: Reference skill package used to validate the Skill Runtime.
+triggers:
+  - example skill
+  - skill runtime
+risk_level: low
+requires:
+  actions: []
+  plugins: []
+outputs:
+  - structured result
+governance:
+  confirmation: false
+status: ACTIVE
+author: JARVIS
