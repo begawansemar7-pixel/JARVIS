@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .models import SkillDefinition, SkillSprint
@@ -16,15 +16,18 @@ class SprintStep:
     objective: str
     practice: str
     evidence: str
+    action_name: str = "skill_step_executor"
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 
 class Adaptive20HourPlanner:
-    """LLM-assisted planner with deterministic fallback.
+    """LLM-assisted planner with executable, validated action routing.
 
-    The planner may propose learning work, but it cannot mutate sprint state.
-    Runtime remains authoritative for hours, evidence, assessment and verification.
+    The planner may propose action names and parameters, but execution is still
+    controlled by SkillExecutionEngine and its allowlist.
     """
     ALLOWED_PHASES = {"learn", "practice", "build", "evaluate"}
+    DEFAULT_ACTION = "skill_step_executor"
 
     def __init__(self, model: str = "gemini-3.1-flash-preview"):
         self.model = model
@@ -53,9 +56,14 @@ Target performance: {skill.target_performance}
 Remaining focused hours: {remaining}
 Completed hours: {sprint.hours_completed}
 Learner context: {context}
-Return ONLY a JSON array. Each item must contain: step, phase, hours, objective, practice, evidence.
+
+Return ONLY a JSON array. Each item must contain:
+step, phase, hours, objective, practice, evidence, action_name, parameters.
 Allowed phases: learn, practice, build, evaluate.
-Total planned hours must equal remaining. Use positive hours only and prioritize a concrete deliverable and fast feedback."""
+The default action_name is skill_step_executor. Use it unless a specific action
+is explicitly available in the supplied context. Never invent an unavailable
+JARVIS action. Parameters must be a JSON object.
+Total planned hours must equal remaining. Prioritize a concrete deliverable and fast feedback."""
         response = client.models.generate_content(model=self.model, contents=prompt)
         text = (response.text or "").strip()
         if text.startswith("```"):
@@ -74,9 +82,14 @@ Total planned hours must equal remaining. Use positive hours only and prioritize
             hours = float(item["hours"])
             if phase not in self.ALLOWED_PHASES or hours <= 0:
                 raise ValueError("Planner returned invalid phase or hours")
+            action_name = str(item.get("action_name") or self.DEFAULT_ACTION).strip()
+            parameters = item.get("parameters") or {}
+            if not isinstance(parameters, dict):
+                raise ValueError("Planner parameters must be an object")
             steps.append(SprintStep(
                 int(item.get("step", index)), phase, round(hours, 2),
                 str(item["objective"]), str(item["practice"]), str(item["evidence"]),
+                action_name, parameters,
             ))
 
         total = round(sum(x.hours for x in steps), 2)
@@ -99,5 +112,5 @@ Total planned hours must equal remaining. Use positive hours only and prioritize
             ("build", "Build a useful end-to-end prototype", "Integrate the components into a realistic use case", "prototype + demo"),
             ("evaluate", "Evaluate and close the highest-impact gaps", "Run rubric-based tests and fix failures", "evaluation report"),
         ]
-        return [SprintStep(i + 1, phases[i][0], h, phases[i][1], phases[i][2], phases[i][3])
+        return [SprintStep(i + 1, phases[i][0], h, phases[i][1], phases[i][2], phases[i][3], "skill_step_executor", {})
                 for i, h in enumerate(chunks)]
