@@ -1,28 +1,16 @@
-"""REST API for JARVIS Skill Runtime.
-
-Run standalone with:
-    uvicorn api.skill_api:app --host 0.0.0.0 --port 8787
-
-Storage selection:
-- SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY => Supabase
-- otherwise => local SQLite
-"""
+"""REST API for JARVIS Skill Runtime."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from core.skill_runtime.models import AssessmentResult, Evidence
 from core.skill_runtime.planner import Adaptive20HourPlanner
-from core.skill_runtime.repository import (
-    SQLiteSkillRepository,
-    SupabaseSkillRepository,
-    sprint_to_dict,
-)
+from core.skill_runtime.repository import SQLiteSkillRepository, SupabaseSkillRepository, sprint_to_dict
 from core.skill_runtime.service import SkillRuntime
 from skill_registry.loader import load_registry
 
@@ -41,7 +29,7 @@ def _build_repository():
 repository = _build_repository()
 runtime = SkillRuntime(registry, repository)
 planner = Adaptive20HourPlanner(os.getenv("JARVIS_PLANNER_MODEL", "gemini-3.1-flash-preview"))
-app = FastAPI(title="JARVIS Skill Runtime API", version="1.1.0")
+app = FastAPI(title="JARVIS Skill Runtime API", version="1.2.0")
 
 
 class StartRequest(BaseModel):
@@ -73,36 +61,48 @@ class AssessmentRequest(BaseModel):
     feedback: str = ""
 
 
+class CapabilityGapRequest(BaseModel):
+    gap_id: str = Field(min_length=1, max_length=128)
+    learner_id: str = Field(min_length=1, max_length=128)
+    capability_id: str | None = Field(default=None, max_length=128)
+    required_skill_id: str = Field(min_length=1, max_length=128)
+    priority: str | None = Field(default=None, max_length=32)
+    context: dict = Field(default_factory=dict)
+
+
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "service": "jarvis-skill-runtime",
-        "skills": len(registry),
-        "repository": type(repository).__name__,
-    }
+    return {"status": "ok", "service": "jarvis-skill-runtime", "skills": len(registry), "repository": type(repository).__name__}
 
 
 @app.get("/skills")
 def skills():
-    return [{
-        "skill_id": s.skill_id,
-        "name": s.name,
-        "domain": s.domain,
-        "level": s.level,
-        "target_hours": s.target_hours,
-        "prerequisites": s.prerequisites,
-    } for s in registry.values()]
+    return [{"skill_id": s.skill_id, "name": s.name, "domain": s.domain, "level": s.level,
+             "target_hours": s.target_hours, "prerequisites": s.prerequisites} for s in registry.values()]
 
 
 @app.post("/skills/{skill_id}/sprints")
-def start(skill_id: str, body: StartRequest):
+def start(skill_id: str, body: StartRequest, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
-        return sprint_to_dict(runtime.start_sprint(skill_id, body.learner_id))
+        return sprint_to_dict(runtime.start_sprint(skill_id, body.learner_id, idempotency_key=idempotency_key))
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+        raise HTTPException(409, str(e)) from e
+
+
+@app.post("/tania/capability-gaps/{gap_id}/sprints")
+def start_from_tania(gap_id: str, body: CapabilityGapRequest, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+    if gap_id != body.gap_id:
+        raise HTTPException(400, "gap_id path and body must match")
+    try:
+        gap = body.model_dump()
+        sprint = runtime.start_from_capability_gap(gap, idempotency_key=idempotency_key or f"tania:{gap_id}")
+        return {"source": "TANIA", "gap_id": gap_id, "capability_id": body.capability_id, "sprint": sprint_to_dict(sprint)}
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
 
 
 @app.get("/sprints/{sprint_id}")
@@ -114,9 +114,9 @@ def get_sprint(sprint_id: str):
 
 
 @app.post("/sprints/{sprint_id}/practice/start")
-def begin_practice(sprint_id: str):
+def begin_practice(sprint_id: str, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
-        return sprint_to_dict(runtime.begin_practice(sprint_id))
+        return sprint_to_dict(runtime.begin_practice(sprint_id, idempotency_key=idempotency_key))
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
@@ -124,9 +124,9 @@ def begin_practice(sprint_id: str):
 
 
 @app.post("/sprints/{sprint_id}/practice")
-def practice(sprint_id: str, body: PracticeRequest):
+def practice(sprint_id: str, body: PracticeRequest, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
-        return sprint_to_dict(runtime.log_practice(sprint_id, body.hours))
+        return sprint_to_dict(runtime.log_practice(sprint_id, body.hours, idempotency_key=idempotency_key))
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
@@ -134,10 +134,10 @@ def practice(sprint_id: str, body: PracticeRequest):
 
 
 @app.post("/sprints/{sprint_id}/evidence")
-def evidence(sprint_id: str, body: EvidenceRequest):
+def evidence(sprint_id: str, body: EvidenceRequest, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
         evidence_item = Evidence(uuid4().hex, body.kind, body.title, body.score, body.metadata)
-        return sprint_to_dict(runtime.add_evidence(sprint_id, evidence_item))
+        return sprint_to_dict(runtime.add_evidence(sprint_id, evidence_item, idempotency_key=idempotency_key))
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
@@ -151,20 +151,17 @@ def plan(sprint_id: str, body: PlanRequest | None = None):
         skill = registry[sprint.skill_id]
         context = body.learner_context if body else {}
         steps = planner.plan(skill, sprint, context)
-        return {
-            "sprint_id": sprint_id,
-            "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
-            "steps": [s.__dict__ for s in steps],
-        }
+        return {"sprint_id": sprint_id, "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
+                "steps": [s.__dict__ for s in steps]}
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
 
 
 @app.post("/sprints/{sprint_id}/assessment")
-def assessment(sprint_id: str, body: AssessmentRequest):
+def assessment(sprint_id: str, body: AssessmentRequest, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
         result = AssessmentResult(**body.model_dump())
-        return sprint_to_dict(runtime.submit_assessment(sprint_id, result))
+        return sprint_to_dict(runtime.submit_assessment(sprint_id, result, idempotency_key=idempotency_key))
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
@@ -172,10 +169,19 @@ def assessment(sprint_id: str, body: AssessmentRequest):
 
 
 @app.post("/sprints/{sprint_id}/retry")
-def retry(sprint_id: str):
+def retry(sprint_id: str, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
-        return sprint_to_dict(runtime.retry(sprint_id))
+        return sprint_to_dict(runtime.retry(sprint_id, idempotency_key=idempotency_key))
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
         raise HTTPException(409, str(e)) from e
+
+
+@app.get("/sprints/{sprint_id}/audit")
+def audit(sprint_id: str, limit: int = 100):
+    try:
+        runtime.get(sprint_id)
+        return runtime.audit(sprint_id, limit)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
