@@ -1,8 +1,4 @@
-"""JARVIS Skill Runtime action.
-
-Bridge between Gemini Live tool-calling and the capability engine. SkillRuntime
-remains authoritative for lifecycle, prerequisites, verification and audit.
-"""
+"""JARVIS Skill Runtime action."""
 from __future__ import annotations
 
 import json
@@ -35,42 +31,35 @@ def _handle(parameters: dict) -> str:
     idempotency_key = parameters.get("idempotency_key")
 
     if operation == "catalog":
-        return _result(operation, [{
-            "skill_id": s.skill_id, "name": s.name, "domain": s.domain,
-            "level": s.level, "target_hours": s.target_hours,
-            "prerequisites": s.prerequisites,
-        } for s in _REGISTRY.values()])
+        return _result(operation, [{"skill_id": s.skill_id, "name": s.name, "domain": s.domain,
+                                    "level": s.level, "target_hours": s.target_hours, "prerequisites": s.prerequisites}
+                                   for s in _REGISTRY.values()])
 
     if operation == "start":
         if not skill_id:
             raise ValueError("skill_id is required for start")
-        sprint = _RUNTIME.start_sprint(skill_id, learner_id, idempotency_key=idempotency_key)
-        return _result(operation, sprint_to_dict(sprint))
+        return _result(operation, sprint_to_dict(_RUNTIME.start_sprint(skill_id, learner_id, idempotency_key=idempotency_key)))
 
     if operation == "tania_gap":
-        gap = parameters.get("capability_gap") or {}
-        if not gap:
-            gap = {
-                "gap_id": parameters.get("gap_id"),
-                "learner_id": parameters.get("learner_id"),
-                "talent_id": parameters.get("talent_id"),
-                "capability_id": parameters.get("capability_id"),
-                "required_skill_id": parameters.get("required_skill_id") or skill_id,
-                "priority": parameters.get("priority"),
-            }
+        gap = parameters.get("capability_gap") or {
+            "gap_id": parameters.get("gap_id"), "learner_id": parameters.get("learner_id"),
+            "talent_id": parameters.get("talent_id"), "capability_id": parameters.get("capability_id"),
+            "required_skill_id": parameters.get("required_skill_id") or skill_id, "priority": parameters.get("priority"),
+        }
         sprint = _RUNTIME.start_from_capability_gap(gap, idempotency_key=idempotency_key)
-        return _result(operation, {
-            "gap_id": gap.get("gap_id"),
-            "capability_id": gap.get("capability_id"),
-            "sprint": sprint_to_dict(sprint),
-        })
+        return _result(operation, {"gap_id": gap.get("gap_id"), "capability_id": gap.get("capability_id"), "sprint": sprint_to_dict(sprint)})
 
     if operation == "practice":
         if not sprint_id:
             raise ValueError("sprint_id is required for practice")
-        sprint = _RUNTIME.begin_practice(sprint_id, idempotency_key=idempotency_key) if parameters.get("begin") else _RUNTIME.get(sprint_id)
+        if parameters.get("begin"):
+            begin_key = f"{idempotency_key}:begin" if idempotency_key else None
+            _RUNTIME.begin_practice(sprint_id, idempotency_key=begin_key)
         if parameters.get("hours") is not None:
-            sprint = _RUNTIME.log_practice(sprint_id, float(parameters["hours"]), idempotency_key=idempotency_key)
+            hours_key = f"{idempotency_key}:hours" if idempotency_key else None
+            sprint = _RUNTIME.log_practice(sprint_id, float(parameters["hours"]), idempotency_key=hours_key)
+        else:
+            sprint = _RUNTIME.get(sprint_id)
         return _result(operation, sprint_to_dict(sprint))
 
     if operation == "evidence":
@@ -79,10 +68,8 @@ def _handle(parameters: dict) -> str:
         for key in ("kind", "title"):
             if not parameters.get(key):
                 raise ValueError(f"{key} is required for evidence")
-        evidence = Evidence(
-            parameters.get("evidence_id", uuid4().hex), parameters["kind"], parameters["title"],
-            float(parameters.get("score", 0)), parameters.get("metadata") or {},
-        )
+        evidence = Evidence(parameters.get("evidence_id", uuid4().hex), parameters["kind"], parameters["title"],
+                             float(parameters.get("score", 0)), parameters.get("metadata") or {})
         return _result(operation, sprint_to_dict(_RUNTIME.add_evidence(sprint_id, evidence, idempotency_key)))
 
     if operation == "plan":
@@ -91,11 +78,9 @@ def _handle(parameters: dict) -> str:
         sprint = _RUNTIME.get(sprint_id)
         skill = _REGISTRY[sprint.skill_id]
         steps = _PLANNER.plan(skill, sprint, parameters.get("learner_context") or {})
-        return _result(operation, {
-            "sprint_id": sprint_id,
-            "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
-            "steps": [s.__dict__ for s in steps],
-        })
+        return _result(operation, {"sprint_id": sprint_id,
+                                   "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
+                                   "steps": [s.__dict__ for s in steps]})
 
     if operation == "assess":
         if not sprint_id:
@@ -104,12 +89,9 @@ def _handle(parameters: dict) -> str:
         missing = [key for key in required if key not in parameters]
         if missing:
             raise ValueError(f"Missing assessment fields: {', '.join(missing)}")
-        result = AssessmentResult(
-            knowledge=float(parameters["knowledge"]), execution=float(parameters["execution"]),
-            quality=float(parameters["quality"]), independence=float(parameters["independence"]),
-            business_relevance=float(parameters["business_relevance"]), evidence_score=float(parameters["evidence_score"]),
-            feedback=parameters.get("feedback", ""),
-        )
+        result = AssessmentResult(float(parameters["knowledge"]), float(parameters["execution"]), float(parameters["quality"]),
+                                  float(parameters["independence"]), float(parameters["business_relevance"]),
+                                  float(parameters["evidence_score"]), feedback=parameters.get("feedback", ""))
         return _result(operation, sprint_to_dict(_RUNTIME.submit_assessment(sprint_id, result, idempotency_key)))
 
     if operation == "retry":
@@ -131,38 +113,21 @@ def _handle(parameters: dict) -> str:
 TOOL = {
     "name": "skill_runtime",
     "description": "Execute JARVIS skills and 20-hour capability sprints. Operations: catalog, start, tania_gap, plan, practice, evidence, assess, retry, audit, status.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "operation": {"type": "STRING", "description": "catalog|start|tania_gap|plan|practice|evidence|assess|retry|audit|status"},
-            "skill_id": {"type": "STRING", "description": "Registered skill ID, e.g. AI-RAG-001"},
-            "learner_id": {"type": "STRING", "description": "Learner/talent identifier"},
-            "sprint_id": {"type": "STRING", "description": "Sprint identifier"},
-            "idempotency_key": {"type": "STRING", "description": "Stable key for safe retry of a mutating operation"},
-            "gap_id": {"type": "STRING", "description": "TANIA capability gap identifier"},
-            "talent_id": {"type": "STRING", "description": "TANIA talent identifier"},
-            "capability_id": {"type": "STRING", "description": "TANIA capability identifier"},
-            "required_skill_id": {"type": "STRING", "description": "Skill mapped from the TANIA capability gap"},
-            "priority": {"type": "STRING", "description": "TANIA gap priority"},
-            "capability_gap": {"type": "OBJECT", "description": "TANIA capability-gap contract"},
-            "begin": {"type": "BOOLEAN", "description": "Transition a sprint into practice"},
-            "hours": {"type": "NUMBER", "description": "Focused practice hours to log"},
-            "kind": {"type": "STRING", "description": "Evidence type"},
-            "title": {"type": "STRING", "description": "Evidence title"},
-            "score": {"type": "NUMBER", "description": "Evidence score 0-100"},
-            "evidence_id": {"type": "STRING", "description": "Optional evidence ID"},
-            "metadata": {"type": "OBJECT", "description": "Evidence metadata"},
-            "learner_context": {"type": "OBJECT", "description": "Context used by adaptive planner"},
-            "knowledge": {"type": "NUMBER", "description": "Assessment score 0-100"},
-            "execution": {"type": "NUMBER", "description": "Assessment score 0-100"},
-            "quality": {"type": "NUMBER", "description": "Assessment score 0-100"},
-            "independence": {"type": "NUMBER", "description": "Assessment score 0-100"},
-            "business_relevance": {"type": "NUMBER", "description": "Assessment score 0-100"},
-            "evidence_score": {"type": "NUMBER", "description": "Evidence gate score 0-100"},
-            "feedback": {"type": "STRING", "description": "Assessment feedback"},
-            "limit": {"type": "INTEGER", "description": "Audit event limit"},
-        },
-        "required": ["operation"],
-    },
+    "parameters": {"type": "OBJECT", "properties": {
+        "operation": {"type": "STRING", "description": "catalog|start|tania_gap|plan|practice|evidence|assess|retry|audit|status"},
+        "skill_id": {"type": "STRING", "description": "Registered skill ID"}, "learner_id": {"type": "STRING", "description": "Learner/talent identifier"},
+        "sprint_id": {"type": "STRING", "description": "Sprint identifier"}, "idempotency_key": {"type": "STRING", "description": "Stable retry key"},
+        "gap_id": {"type": "STRING", "description": "TANIA capability gap identifier"}, "talent_id": {"type": "STRING", "description": "TANIA talent identifier"},
+        "capability_id": {"type": "STRING", "description": "TANIA capability identifier"}, "required_skill_id": {"type": "STRING", "description": "Skill mapped from TANIA gap"},
+        "priority": {"type": "STRING", "description": "TANIA gap priority"}, "capability_gap": {"type": "OBJECT", "description": "TANIA capability-gap contract"},
+        "begin": {"type": "BOOLEAN", "description": "Begin practice"}, "hours": {"type": "NUMBER", "description": "Practice hours"},
+        "kind": {"type": "STRING", "description": "Evidence type"}, "title": {"type": "STRING", "description": "Evidence title"},
+        "score": {"type": "NUMBER", "description": "Evidence score 0-100"}, "evidence_id": {"type": "STRING", "description": "Evidence ID"},
+        "metadata": {"type": "OBJECT", "description": "Evidence metadata"}, "learner_context": {"type": "OBJECT", "description": "Planner context"},
+        "knowledge": {"type": "NUMBER", "description": "Assessment score"}, "execution": {"type": "NUMBER", "description": "Assessment score"},
+        "quality": {"type": "NUMBER", "description": "Assessment score"}, "independence": {"type": "NUMBER", "description": "Assessment score"},
+        "business_relevance": {"type": "NUMBER", "description": "Assessment score"}, "evidence_score": {"type": "NUMBER", "description": "Evidence gate score"},
+        "feedback": {"type": "STRING", "description": "Assessment feedback"}, "limit": {"type": "INTEGER", "description": "Audit event limit"},
+    }, "required": ["operation"]},
     "handler": _handle,
 }
