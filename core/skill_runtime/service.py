@@ -6,18 +6,22 @@ from uuid import uuid4
 from .models import SkillDefinition, SkillSprint, AssessmentResult, Evidence
 from .states import transition
 from .scoring import is_verified
-from .repository import SkillRepository, sprint_to_dict
+from .repository import SkillRepository
+from .tania import TaniaCapabilityClient
 
 
 class SkillRuntime:
     """Authoritative skill execution runtime.
 
-    The runtime owns lifecycle, prerequisites, verification, idempotency and
-    audit events. LLM/planner output is advisory and never changes state.
+    The runtime owns lifecycle, prerequisites, verification, idempotency, audit
+    events and the TANIA capability-status handoff. Planner/LLM output is never
+    trusted to mutate capability state.
     """
-    def __init__(self, registry: dict[str, SkillDefinition], repository: SkillRepository | None = None):
+    def __init__(self, registry: dict[str, SkillDefinition], repository: SkillRepository | None = None,
+                 tania_client: TaniaCapabilityClient | None = None):
         self.registry = registry
         self.repository = repository
+        self.tania = tania_client or TaniaCapabilityClient()
         self.sprints: dict[str, SkillSprint] = {}
         self._idempotency: dict[tuple[str, str], str] = {}
         self.events: list[dict[str, Any]] = []
@@ -56,6 +60,9 @@ class SkillRuntime:
             except (AttributeError, NotImplementedError):
                 pass
 
+    def record_event(self, event_type: str, sprint: SkillSprint, payload: dict[str, Any] | None = None) -> None:
+        self._event(event_type, sprint, payload=payload)
+
     def _idempotent(self, operation: str, key: str | None, fn: Callable[[], SkillSprint]) -> SkillSprint:
         if not key:
             return fn()
@@ -81,13 +88,11 @@ class SkillRuntime:
         return sprint
 
     def _verified(self, learner_id: str, skill_id: str) -> bool:
-        for sprint in self.sprints.values():
-            if sprint.learner_id == learner_id and sprint.skill_id == skill_id and sprint.state == "verified":
-                return True
         if self.repository:
             return any(s.learner_id == learner_id and s.skill_id == skill_id and s.state == "verified"
                        for s in self.repository.list_sprints(learner_id))
-        return False
+        return any(s.learner_id == learner_id and s.skill_id == skill_id and s.state == "verified"
+                   for s in self.sprints.values())
 
     def _check_prerequisites(self, skill: SkillDefinition, learner_id: str) -> None:
         missing = [p for p in skill.prerequisites if not self._verified(learner_id, p)]
@@ -107,6 +112,8 @@ class SkillRuntime:
             sprint.state = transition(sprint.state, "start")
             saved = self._save(sprint)
             self._event("sprint.started", saved, idempotency_key, {"source": source or "direct"})
+            if source and source.get("system") == "TANIA":
+                self._update_tania(saved, source, "IN_PROGRESS")
             return saved
         return self._idempotent("start", idempotency_key, create)
 
@@ -173,9 +180,14 @@ class SkillRuntime:
             saved = self._save(sprint)
             self._event("assessment.completed", saved, idempotency_key,
                          {"passed": result.passed, "feedback": result.feedback})
+            source = self._tania_source(saved)
             if result.passed:
                 self._event("capability.verified", saved, idempotency_key,
                              {"skill_id": saved.skill_id, "version": saved.version})
+                if source:
+                    self._update_tania(saved, source, "VERIFIED")
+            elif source:
+                self._update_tania(saved, source, "REMEDIATION")
             return saved
         return self._idempotent("submit_assessment", idempotency_key, mutate)
 
@@ -189,18 +201,37 @@ class SkillRuntime:
         return self._idempotent("retry", idempotency_key, mutate)
 
     def start_from_capability_gap(self, gap: dict[str, Any], idempotency_key: str | None = None) -> SkillSprint:
-        """Create a sprint directly from a TANIA capability-gap contract."""
         learner_id = str(gap.get("learner_id") or gap.get("talent_id") or "")
         skill_id = str(gap.get("required_skill_id") or gap.get("skill_id") or "")
         if not learner_id or not skill_id:
             raise ValueError("TANIA capability gap requires learner_id and required_skill_id")
         source = {
-            "system": "TANIA",
-            "gap_id": gap.get("gap_id"),
-            "capability_id": gap.get("capability_id"),
-            "priority": gap.get("priority"),
+            "system": "TANIA", "gap_id": gap.get("gap_id"),
+            "capability_id": gap.get("capability_id"), "priority": gap.get("priority"),
         }
         return self.start_sprint(skill_id, learner_id, idempotency_key=idempotency_key, source=source)
+
+    def _tania_source(self, sprint: SkillSprint) -> dict[str, Any] | None:
+        events = self.audit(sprint.sprint_id, 1000)
+        for event in reversed(events):
+            source = (event.get("payload") or {}).get("source")
+            if isinstance(source, dict) and source.get("system") == "TANIA":
+                return source
+        return None
+
+    def _update_tania(self, sprint: SkillSprint, source: dict[str, Any], status: str) -> None:
+        try:
+            result = self.tania.update_capability_status(
+                gap_id=source.get("gap_id"), capability_id=source.get("capability_id"),
+                learner_id=sprint.learner_id, status=status, skill_id=sprint.skill_id,
+                sprint_id=sprint.sprint_id,
+                metadata={"priority": source.get("priority"), "runtime_state": sprint.state},
+            )
+            self._event("tania.capability.status_updated", sprint,
+                        payload={"status": status, "result": result})
+        except Exception as exc:
+            self._event("tania.capability.status_update_failed", sprint,
+                        payload={"status": status, "error": str(exc)})
 
     def audit(self, sprint_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         if self.repository:
