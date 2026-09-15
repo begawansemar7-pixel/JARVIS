@@ -10,6 +10,7 @@ on:
       - "skill_registry/**"
       - "actions/skill_runtime.py"
       - "api/skill_api.py"
+      - "supabase/migrations/**"
       - "tests/skill_runtime/**"
       - ".github/workflows/skill-runtime.yml"
 
