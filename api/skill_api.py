@@ -1,4 +1,4 @@
-"""REST API for JARVIS Skill Runtime."""
+"""REST API for JARVIS Skill Runtime and Capability Execution Engine."""
 from __future__ import annotations
 
 import os
@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from core.skill_runtime.execution import SkillExecutionEngine
 from core.skill_runtime.models import AssessmentResult, Evidence
 from core.skill_runtime.planner import Adaptive20HourPlanner
 from core.skill_runtime.repository import SQLiteSkillRepository, SupabaseSkillRepository, sprint_to_dict
@@ -29,7 +30,17 @@ def _build_repository():
 repository = _build_repository()
 runtime = SkillRuntime(registry, repository)
 planner = Adaptive20HourPlanner(os.getenv("JARVIS_PLANNER_MODEL", "gemini-3.1-flash-preview"))
-app = FastAPI(title="JARVIS Skill Runtime API", version="1.2.0")
+
+
+def _dispatch(action_name: str, parameters: dict) -> str:
+    if action_name != "skill_step_executor":
+        raise ValueError(f"Unsupported skill action: {action_name}")
+    from actions.skill_step_executor import _execute
+    return _execute(parameters)
+
+
+executor = SkillExecutionEngine(_dispatch, runtime, {"skill_step_executor"})
+app = FastAPI(title="JARVIS Capability Execution Engine API", version="1.3.0")
 
 
 class StartRequest(BaseModel):
@@ -72,7 +83,7 @@ class CapabilityGapRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "jarvis-skill-runtime", "skills": len(registry), "repository": type(repository).__name__}
+    return {"status": "ok", "service": "jarvis-capability-execution-engine", "skills": len(registry), "repository": type(repository).__name__}
 
 
 @app.get("/skills")
@@ -113,6 +124,37 @@ def get_sprint(sprint_id: str):
         raise HTTPException(404, str(e)) from e
 
 
+@app.post("/sprints/{sprint_id}/plan")
+def plan(sprint_id: str, body: PlanRequest | None = None):
+    try:
+        sprint = runtime.get(sprint_id)
+        skill = registry[sprint.skill_id]
+        context = body.learner_context if body else {}
+        return executor.build_plan(skill, sprint, planner.plan(skill, sprint, context)).to_dict()
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@app.post("/sprints/{sprint_id}/execute")
+def execute(sprint_id: str, body: PlanRequest | None = None,
+            idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+    try:
+        sprint = runtime.get(sprint_id)
+        skill = registry[sprint.skill_id]
+        plan = executor.build_plan(skill, sprint, planner.plan(skill, sprint, body.learner_context if body else {}))
+        runtime.record_event("skill.execution.started", sprint, {"plan_id": plan.plan_id, "step_count": len(plan.steps)})
+        result = executor.execute(plan, idempotency_prefix=idempotency_key or plan.plan_id)
+        runtime.record_event("skill.execution.completed" if result.status == "completed" else "skill.execution.failed",
+                             sprint, {"plan_id": plan.plan_id, "status": result.status})
+        return result.to_dict()
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+
 @app.post("/sprints/{sprint_id}/practice/start")
 def begin_practice(sprint_id: str, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     try:
@@ -142,19 +184,6 @@ def evidence(sprint_id: str, body: EvidenceRequest, idempotency_key: str | None 
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
         raise HTTPException(409, str(e)) from e
-
-
-@app.post("/sprints/{sprint_id}/plan")
-def plan(sprint_id: str, body: PlanRequest | None = None):
-    try:
-        sprint = runtime.get(sprint_id)
-        skill = registry[sprint.skill_id]
-        context = body.learner_context if body else {}
-        steps = planner.plan(skill, sprint, context)
-        return {"sprint_id": sprint_id, "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
-                "steps": [s.__dict__ for s in steps]}
-    except KeyError as e:
-        raise HTTPException(404, str(e)) from e
 
 
 @app.post("/sprints/{sprint_id}/assessment")
