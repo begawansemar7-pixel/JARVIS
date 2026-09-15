@@ -1,0 +1,24 @@
+name: Skill Runtime CI
+
+on:
+  push:
+    branches: ["feat/20hour-skill-engine"]
+  pull_request:
+    paths:
+      - "core/skill_runtime/**"
+      - "skill-registry/**"
+      - "skill_registry/**"
+      - "actions/skill_runtime.py"
+      - "api/skill_api.py"
+      - "tests/skill_runtime/**"
+      - ".github/workflows/skill-runtime.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pytest tests/skill_runtime -q
