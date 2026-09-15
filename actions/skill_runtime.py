@@ -1,18 +1,21 @@
 """JARVIS Skill Runtime action.
 
-This is the bridge between Gemini Live tool-calling and the capability engine.
-The action exposes one stable `skill_runtime` tool while keeping lifecycle/state
-logic inside core.skill_runtime.
+Bridge between Gemini Live tool-calling and the capability engine. The action
+is intentionally thin: SkillRuntime remains the authority for lifecycle,
+evidence and verification, while this module translates tool parameters into
+runtime calls and JSON-safe responses.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+from uuid import uuid4
 
+from core.skill_runtime.models import AssessmentResult, Evidence
 from core.skill_runtime.planner import Adaptive20HourPlanner
 from core.skill_runtime.repository import SQLiteSkillRepository, sprint_to_dict
 from core.skill_runtime.service import SkillRuntime
-from core.skill_runtime.models import AssessmentResult, Evidence
 from skill_registry.loader import load_registry
 
 _BASE = Path(__file__).resolve().parent.parent
@@ -22,42 +25,87 @@ _RUNTIME = SkillRuntime(_REGISTRY, _REPOSITORY)
 _PLANNER = Adaptive20HourPlanner(os.getenv("JARVIS_PLANNER_MODEL", "gemini-3.1-flash-preview"))
 
 
+def _result(operation: str, data) -> str:
+    return json.dumps({"ok": True, "operation": operation, "data": data}, ensure_ascii=False, default=str)
+
+
 def _handle(parameters: dict) -> str:
-    operation = parameters.get("operation", "status")
+    operation = str(parameters.get("operation", "status")).lower()
     skill_id = parameters.get("skill_id")
     learner_id = parameters.get("learner_id", "default")
     sprint_id = parameters.get("sprint_id")
 
+    if operation == "catalog":
+        return _result(operation, [{
+            "skill_id": s.skill_id, "name": s.name, "domain": s.domain,
+            "level": s.level, "target_hours": s.target_hours,
+            "prerequisites": s.prerequisites,
+        } for s in _REGISTRY.values()])
+
     if operation == "start":
+        if not skill_id:
+            raise ValueError("skill_id is required for start")
         sprint = _RUNTIME.start_sprint(skill_id, learner_id)
-        return f"Started {skill_id} sprint {sprint.sprint_id}; state={sprint.state}."
+        return _result(operation, sprint_to_dict(sprint))
+
     if operation == "practice":
+        if not sprint_id:
+            raise ValueError("sprint_id is required for practice")
         sprint = _RUNTIME.begin_practice(sprint_id) if parameters.get("begin") else _RUNTIME.get(sprint_id)
-        if parameters.get("hours"):
+        if parameters.get("hours") is not None:
             sprint = _RUNTIME.log_practice(sprint_id, float(parameters["hours"]))
-        return str(sprint_to_dict(sprint))
+        return _result(operation, sprint_to_dict(sprint))
+
     if operation == "evidence":
-        e = Evidence(parameters.get("evidence_id", __import__('uuid').uuid4().hex), parameters["kind"], parameters["title"], float(parameters.get("score", 0)), parameters.get("metadata", {}))
-        return str(sprint_to_dict(_RUNTIME.add_evidence(sprint_id, e)))
+        if not sprint_id:
+            raise ValueError("sprint_id is required for evidence")
+        for key in ("kind", "title"):
+            if not parameters.get(key):
+                raise ValueError(f"{key} is required for evidence")
+        evidence = Evidence(
+            parameters.get("evidence_id", uuid4().hex),
+            parameters["kind"], parameters["title"],
+            float(parameters.get("score", 0)), parameters.get("metadata") or {},
+        )
+        return _result(operation, sprint_to_dict(_RUNTIME.add_evidence(sprint_id, evidence)))
+
     if operation == "plan":
+        if not sprint_id:
+            raise ValueError("sprint_id is required for plan")
         sprint = _RUNTIME.get(sprint_id)
         skill = _REGISTRY[sprint.skill_id]
-        steps = _PLANNER.plan(skill, sprint, parameters.get("learner_context", {}))
-        return str([s.__dict__ for s in steps])
+        steps = _PLANNER.plan(skill, sprint, parameters.get("learner_context") or {})
+        return _result(operation, {
+            "sprint_id": sprint_id,
+            "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
+            "steps": [s.__dict__ for s in steps],
+        })
+
     if operation == "assess":
+        if not sprint_id:
+            raise ValueError("sprint_id is required for assess")
+        required = ("knowledge", "execution", "quality", "independence", "business_relevance", "evidence_score")
+        missing = [key for key in required if key not in parameters]
+        if missing:
+            raise ValueError(f"Missing assessment fields: {', '.join(missing)}")
         result = AssessmentResult(
             knowledge=float(parameters["knowledge"]), execution=float(parameters["execution"]),
             quality=float(parameters["quality"]), independence=float(parameters["independence"]),
-            business_relevance=float(parameters["business_relevance"]), evidence_score=float(parameters["evidence_score"]),
-            feedback=parameters.get("feedback", ""),
+            business_relevance=float(parameters["business_relevance"]),
+            evidence_score=float(parameters["evidence_score"]), feedback=parameters.get("feedback", ""),
         )
-        return str(sprint_to_dict(_RUNTIME.submit_assessment(sprint_id, result)))
+        return _result(operation, sprint_to_dict(_RUNTIME.submit_assessment(sprint_id, result)))
+
     if operation == "retry":
-        return str(sprint_to_dict(_RUNTIME.retry(sprint_id)))
+        if not sprint_id:
+            raise ValueError("sprint_id is required for retry")
+        return _result(operation, sprint_to_dict(_RUNTIME.retry(sprint_id)))
+
     if operation == "status":
-        return str(sprint_to_dict(_RUNTIME.get(sprint_id))) if sprint_id else str([sprint_to_dict(s) for s in _REPOSITORY.list_sprints(learner_id)])
-    if operation == "catalog":
-        return str([{"skill_id": s.skill_id, "name": s.name, "level": s.level, "target_hours": s.target_hours} for s in _REGISTRY.values()])
+        if sprint_id:
+            return _result(operation, sprint_to_dict(_RUNTIME.get(sprint_id)))
+        return _result(operation, [sprint_to_dict(s) for s in _REPOSITORY.list_sprints(learner_id)])
+
     raise ValueError(f"Unknown skill runtime operation: {operation}")
 
 
