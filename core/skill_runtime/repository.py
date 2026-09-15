@@ -12,6 +12,10 @@ class SkillRepository(Protocol):
     def save_sprint(self, sprint: SkillSprint) -> None: ...
     def get_sprint(self, sprint_id: str) -> SkillSprint | None: ...
     def list_sprints(self, learner_id: str | None = None) -> list[SkillSprint]: ...
+    def save_idempotency(self, key: str, operation: str, sprint_id: str) -> None: ...
+    def get_idempotency(self, key: str, operation: str) -> str | None: ...
+    def append_event(self, event: dict[str, Any]) -> None: ...
+    def list_events(self, sprint_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]: ...
 
 
 def _evidence_to_dict(e: Evidence) -> dict[str, Any]:
@@ -54,6 +58,25 @@ class SQLiteSkillRepository:
                 version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )""")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_skill_sprints_learner ON skill_sprints(learner_id)")
+            conn.execute("""CREATE TABLE IF NOT EXISTS skill_idempotency (
+                idempotency_key TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                sprint_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (idempotency_key, operation)
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS skill_events (
+                event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                sprint_id TEXT,
+                skill_id TEXT,
+                learner_id TEXT,
+                idempotency_key TEXT,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_skill_events_sprint ON skill_events(sprint_id, occurred_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_skill_events_learner ON skill_events(learner_id, occurred_at)")
 
     def save_sprint(self, sprint: SkillSprint) -> None:
         payload = sprint_to_dict(sprint)
@@ -81,6 +104,40 @@ class SQLiteSkillRepository:
             else:
                 rows = conn.execute("SELECT * FROM skill_sprints ORDER BY updated_at DESC").fetchall()
         return [self._row_to_sprint(r) for r in rows]
+
+    def save_idempotency(self, key: str, operation: str, sprint_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("INSERT OR IGNORE INTO skill_idempotency(idempotency_key, operation, sprint_id) VALUES (?, ?, ?)",
+                         (key, operation, sprint_id))
+
+    def get_idempotency(self, key: str, operation: str) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT sprint_id FROM skill_idempotency WHERE idempotency_key=? AND operation=?",
+                               (key, operation)).fetchone()
+        return row["sprint_id"] if row else None
+
+    def append_event(self, event: dict[str, Any]) -> None:
+        with self._connect() as conn:
+            conn.execute("""INSERT INTO skill_events
+                (event_id, event_type, sprint_id, skill_id, learner_id, idempotency_key, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (event["event_id"], event["event_type"], event.get("sprint_id"), event.get("skill_id"),
+                 event.get("learner_id"), event.get("idempotency_key"), json.dumps(event.get("payload", {}), default=str)))
+
+    def list_events(self, sprint_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 1000))
+        with self._connect() as conn:
+            if sprint_id:
+                rows = conn.execute("SELECT * FROM skill_events WHERE sprint_id=? ORDER BY occurred_at DESC LIMIT ?",
+                                    (sprint_id, limit)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM skill_events ORDER BY occurred_at DESC LIMIT ?", (limit,)).fetchall()
+        return [{
+            "event_id": r["event_id"], "event_type": r["event_type"], "sprint_id": r["sprint_id"],
+            "skill_id": r["skill_id"], "learner_id": r["learner_id"],
+            "idempotency_key": r["idempotency_key"], "payload": json.loads(r["payload_json"] or "{}"),
+            "occurred_at": r["occurred_at"],
+        } for r in rows]
 
     @staticmethod
     def _row_to_sprint(row: sqlite3.Row) -> SkillSprint:
@@ -140,6 +197,19 @@ class SupabaseSkillRepository:
         r = self._requests.get(self._endpoint, params=params, headers=self._headers(), timeout=15)
         r.raise_for_status()
         return [self._dict_to_sprint(x) for x in r.json()]
+
+    def save_idempotency(self, key: str, operation: str, sprint_id: str) -> None:
+        # Supabase deployments may add these tables later; keep the adapter optional.
+        raise NotImplementedError("Supabase idempotency store is not enabled yet")
+
+    def get_idempotency(self, key: str, operation: str) -> str | None:
+        raise NotImplementedError("Supabase idempotency store is not enabled yet")
+
+    def append_event(self, event: dict[str, Any]) -> None:
+        raise NotImplementedError("Supabase event store is not enabled yet")
+
+    def list_events(self, sprint_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        raise NotImplementedError("Supabase event store is not enabled yet")
 
     @staticmethod
     def _dict_to_sprint(x: dict[str, Any]) -> SkillSprint:
