@@ -1,4 +1,9 @@
-"""JARVIS Skill Runtime action."""
+"""JARVIS Skill Runtime action.
+
+Bridge between Gemini Live tool-calling and the capability engine. SkillRuntime
+remains authoritative for lifecycle, prerequisites, verification, execution,
+audit and TANIA synchronization.
+"""
 from __future__ import annotations
 
 import json
@@ -6,6 +11,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
+from core.skill_runtime.execution import SkillExecutionEngine
 from core.skill_runtime.models import AssessmentResult, Evidence
 from core.skill_runtime.planner import Adaptive20HourPlanner
 from core.skill_runtime.repository import SQLiteSkillRepository, sprint_to_dict
@@ -17,6 +23,16 @@ _REGISTRY = load_registry(_BASE / "skill-registry" / "skills")
 _REPOSITORY = SQLiteSkillRepository(os.getenv("JARVIS_SKILL_DB", str(_BASE / "data" / "jarvis_skills.db")))
 _RUNTIME = SkillRuntime(_REGISTRY, _REPOSITORY)
 _PLANNER = Adaptive20HourPlanner(os.getenv("JARVIS_PLANNER_MODEL", "gemini-3.1-flash-preview"))
+
+
+def _skill_step_dispatch(action_name: str, parameters: dict) -> str:
+    if action_name != "skill_step_executor":
+        raise ValueError(f"Unsupported skill action: {action_name}")
+    from actions.skill_step_executor import _execute
+    return _execute(parameters)
+
+
+_EXECUTOR = SkillExecutionEngine(_skill_step_dispatch, _RUNTIME, {"skill_step_executor"})
 
 
 def _result(operation: str, data) -> str:
@@ -49,6 +65,21 @@ def _handle(parameters: dict) -> str:
         sprint = _RUNTIME.start_from_capability_gap(gap, idempotency_key=idempotency_key)
         return _result(operation, {"gap_id": gap.get("gap_id"), "capability_id": gap.get("capability_id"), "sprint": sprint_to_dict(sprint)})
 
+    if operation in {"plan", "execute"}:
+        if not sprint_id:
+            raise ValueError(f"sprint_id is required for {operation}")
+        sprint = _RUNTIME.get(sprint_id)
+        skill = _REGISTRY[sprint.skill_id]
+        steps = _PLANNER.plan(skill, sprint, parameters.get("learner_context") or {})
+        plan = _EXECUTOR.build_plan(skill, sprint, steps)
+        if operation == "plan":
+            return _result(operation, plan.to_dict())
+        _RUNTIME.record_event("skill.execution.started", sprint, {"plan_id": plan.plan_id, "step_count": len(plan.steps)})
+        result = _EXECUTOR.execute(plan, idempotency_prefix=idempotency_key or plan.plan_id)
+        _RUNTIME.record_event("skill.execution.completed" if result.status == "completed" else "skill.execution.failed",
+                              sprint, {"plan_id": plan.plan_id, "status": result.status})
+        return _result(operation, result.to_dict())
+
     if operation == "practice":
         if not sprint_id:
             raise ValueError("sprint_id is required for practice")
@@ -71,16 +102,6 @@ def _handle(parameters: dict) -> str:
         evidence = Evidence(parameters.get("evidence_id", uuid4().hex), parameters["kind"], parameters["title"],
                              float(parameters.get("score", 0)), parameters.get("metadata") or {})
         return _result(operation, sprint_to_dict(_RUNTIME.add_evidence(sprint_id, evidence, idempotency_key)))
-
-    if operation == "plan":
-        if not sprint_id:
-            raise ValueError("sprint_id is required for plan")
-        sprint = _RUNTIME.get(sprint_id)
-        skill = _REGISTRY[sprint.skill_id]
-        steps = _PLANNER.plan(skill, sprint, parameters.get("learner_context") or {})
-        return _result(operation, {"sprint_id": sprint_id,
-                                   "remaining_hours": round(skill.target_hours - sprint.hours_completed, 2),
-                                   "steps": [s.__dict__ for s in steps]})
 
     if operation == "assess":
         if not sprint_id:
@@ -112,9 +133,9 @@ def _handle(parameters: dict) -> str:
 
 TOOL = {
     "name": "skill_runtime",
-    "description": "Execute JARVIS skills and 20-hour capability sprints. Operations: catalog, start, tania_gap, plan, practice, evidence, assess, retry, audit, status.",
+    "description": "Execute JARVIS skills and 20-hour capability sprints. Operations: catalog, start, tania_gap, plan, execute, practice, evidence, assess, retry, audit, status.",
     "parameters": {"type": "OBJECT", "properties": {
-        "operation": {"type": "STRING", "description": "catalog|start|tania_gap|plan|practice|evidence|assess|retry|audit|status"},
+        "operation": {"type": "STRING", "description": "catalog|start|tania_gap|plan|execute|practice|evidence|assess|retry|audit|status"},
         "skill_id": {"type": "STRING", "description": "Registered skill ID"}, "learner_id": {"type": "STRING", "description": "Learner/talent identifier"},
         "sprint_id": {"type": "STRING", "description": "Sprint identifier"}, "idempotency_key": {"type": "STRING", "description": "Stable retry key"},
         "gap_id": {"type": "STRING", "description": "TANIA capability gap identifier"}, "talent_id": {"type": "STRING", "description": "TANIA talent identifier"},
@@ -126,7 +147,7 @@ TOOL = {
         "metadata": {"type": "OBJECT", "description": "Evidence metadata"}, "learner_context": {"type": "OBJECT", "description": "Planner context"},
         "knowledge": {"type": "NUMBER", "description": "Assessment score"}, "execution": {"type": "NUMBER", "description": "Assessment score"},
         "quality": {"type": "NUMBER", "description": "Assessment score"}, "independence": {"type": "NUMBER", "description": "Assessment score"},
-        "business_relevance": {"type": "NUMBER", "description": "Assessment score"}, "evidence_score": {"type": "NUMBER", "description": "Evidence gate score"},
+        "business_relevance": {"type": "NUMBER", "description": "Business relevance score"}, "evidence_score": {"type": "NUMBER", "description": "Evidence gate score"},
         "feedback": {"type": "STRING", "description": "Assessment feedback"}, "limit": {"type": "INTEGER", "description": "Audit event limit"},
     }, "required": ["operation"]},
     "handler": _handle,
