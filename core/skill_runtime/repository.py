@@ -97,10 +97,7 @@ class SQLiteSkillRepository:
 
 
 class SupabaseSkillRepository:
-    """Supabase REST adapter. Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
-    The same repository contract is used by SkillRuntime, so storage can be
-    switched without changing the skill/action layer.
-    """
+    """Supabase REST adapter using the jarvis_skill_sprints JSONB schema."""
     def __init__(self, url: str, key: str, table: str = "jarvis_skill_sprints"):
         import requests
         self.url, self.key, self.table = url.rstrip("/"), key, table
@@ -110,12 +107,28 @@ class SupabaseSkillRepository:
     def _endpoint(self):
         return f"{self.url}/rest/v1/{self.table}"
 
+    def _headers(self, prefer: str | None = None) -> dict[str, str]:
+        headers = {"apikey": self.key, "Authorization": f"Bearer {self.key}"}
+        if prefer:
+            headers["Prefer"] = prefer
+        return headers
+
     def save_sprint(self, sprint: SkillSprint) -> None:
         payload = sprint_to_dict(sprint)
-        self._requests.post(self._endpoint, headers={"apikey": self.key, "Authorization": f"Bearer {self.key}", "Prefer": "resolution=merge-duplicates"}, json=payload, timeout=15).raise_for_status()
+        self._requests.post(
+            self._endpoint,
+            headers=self._headers("resolution=merge-duplicates,return=representation"),
+            json=payload,
+            timeout=15,
+        ).raise_for_status()
 
     def get_sprint(self, sprint_id: str) -> SkillSprint | None:
-        r = self._requests.get(self._endpoint, params={"sprint_id": f"eq.{sprint_id}", "limit": 1}, headers={"apikey": self.key, "Authorization": f"Bearer {self.key}"}, timeout=15)
+        r = self._requests.get(
+            self._endpoint,
+            params={"sprint_id": f"eq.{sprint_id}", "limit": 1},
+            headers=self._headers(),
+            timeout=15,
+        )
         r.raise_for_status()
         rows = r.json()
         return self._dict_to_sprint(rows[0]) if rows else None
@@ -124,7 +137,7 @@ class SupabaseSkillRepository:
         params = {"order": "updated_at.desc"}
         if learner_id:
             params["learner_id"] = f"eq.{learner_id}"
-        r = self._requests.get(self._endpoint, params=params, headers={"apikey": self.key, "Authorization": f"Bearer {self.key}"}, timeout=15)
+        r = self._requests.get(self._endpoint, params=params, headers=self._headers(), timeout=15)
         r.raise_for_status()
         return [self._dict_to_sprint(x) for x in r.json()]
 
