@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/schemas/evidence.schema.json",
+  "title": "JARVIS Evidence Record",
+  "description": "Machine-readable evidence contract for factual, research and decision-support outputs.",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "claim",
+    "status",
+    "source",
+    "confidence"
+  ],
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "description": "Stable identifier for the evidence record."
+    },
+    "claim": {
+      "type": "string",
+      "description": "Atomic claim supported or qualified by this record."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "KNOWN",
+        "INFERRED",
+        "ASSUMED",
+        "UNKNOWN",
+        "CONFLICTED"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "required": ["type", "title"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user_input",
+            "repository",
+            "official_document",
+            "official_website",
+            "web",
+            "database",
+            "tool",
+            "model_inference",
+            "other"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "uri": {
+          "type": ["string", "null"]
+        },
+        "publisher": {
+          "type": ["string", "null"]
+        },
+        "published_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "retrieved_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "locator": {
+          "type": ["string", "null"],
+          "description": "Page, section, line, commit, record ID or other precise locator."
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "relevance": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "freshness": {
+      "type": "string",
+      "enum": [
+        "current",
+        "recent",
+        "historical",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "supporting_excerpt": {
+      "type": ["string", "null"],
+      "description": "Short source excerpt when permitted and useful."
+    },
+    "reasoning_note": {
+      "type": ["string", "null"],
+      "description": "Concise explanation of how the evidence supports the claim. Do not expose hidden chain-of-thought."
+    },
+    "conflicts_with": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
